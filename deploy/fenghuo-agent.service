@@ -1,0 +1,47 @@
+[Unit]
+Description=Fenghuo agent (send-only server monitor)
+Documentation=https://github.com/mby/fenghuo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Read by systemd as root before privileges are dropped; keep it mode 0600.
+EnvironmentFile=/etc/fenghuo/agent.env
+Environment=GOMEMLIMIT=24MiB
+ExecStart=/usr/local/bin/fenghuo-agent
+Restart=always
+RestartSec=5s
+
+# The agent only reads /proc and /sys and makes outbound HTTPS requests.
+# It runs as a throwaway unprivileged user with no capabilities.
+DynamicUser=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
+UMask=0077
+MemoryMax=64M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

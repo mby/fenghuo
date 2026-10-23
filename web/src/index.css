@@ -1,0 +1,179 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Calm by default, lit only when something is wrong: like a beacon tower,
+ * ember is reserved for nodes that need attention.
+ */
+:root {
+  --radius: 0.625rem;
+  --background: #f3f5f9;
+  --foreground: #172033;
+  --card: #ffffff;
+  --card-foreground: #172033;
+  --popover: #ffffff;
+  --popover-foreground: #172033;
+  --primary: #24304d;
+  --primary-foreground: #f3f5f9;
+  --secondary: #e7ebf2;
+  --secondary-foreground: #24304d;
+  --muted: #e7ebf2;
+  --muted-foreground: #586380;
+  --accent: #e7ebf2;
+  --accent-foreground: #172033;
+  --destructive: #c8401f;
+  --border: #dde3ec;
+  --input: #d3dae5;
+  --ring: #8c97ad;
+  --jade: #23906a;
+  --ember: #e2531f;
+  --amber: #b97b10;
+  --chart-1: #3768d0;
+  --chart-2: #23906a;
+  --chart-3: #e2531f;
+  --chart-4: #7e58c9;
+  --chart-5: #b97b10;
+}
+
+.dark {
+  --background: #131a2b;
+  --foreground: #e3e8f1;
+  --card: #1a2338;
+  --card-foreground: #e3e8f1;
+  --popover: #1c263c;
+  --popover-foreground: #e3e8f1;
+  --primary: #e3e8f1;
+  --primary-foreground: #131a2b;
+  --secondary: #243049;
+  --secondary-foreground: #e3e8f1;
+  --muted: #212c43;
+  --muted-foreground: #8f9ab0;
+  --accent: #26324c;
+  --accent-foreground: #e3e8f1;
+  --destructive: #f0623a;
+  --border: #29354f;
+  --input: #303d59;
+  --ring: #5b6a8a;
+  --jade: #45bf93;
+  --ember: #f2683c;
+  --amber: #e2a43e;
+  --chart-1: #6c9bff;
+  --chart-2: #45bf93;
+  --chart-3: #f2683c;
+  --chart-4: #b08cff;
+  --chart-5: #e2a43e;
+}
+
+@theme inline {
+  --font-sans:
+    "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-jade: var(--jade);
+  --color-ember: var(--ember);
+  --color-amber: var(--amber);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  ::selection {
+    background: var(--secondary);
+    color: var(--foreground);
+  }
+  :focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: 3px;
+  }
+  input,
+  textarea {
+    caret-color: var(--foreground);
+  }
+  * {
+    scrollbar-color: var(--input) transparent;
+  }
+}
+
+.public-select {
+  height: 2.25rem;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--foreground);
+  padding-inline: 0.625rem;
+  font-size: 0.875rem;
+}
+
+.public-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* A node that needs attention: the beacon is lit. */
+.lit {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--ember) 55%, transparent),
+    0 10px 30px -14px color-mix(in oklab, var(--ember) 70%, transparent);
+}
+
+@keyframes flicker {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  45% {
+    opacity: 0.6;
+    transform: scale(0.85);
+  }
+}
+
+.flicker {
+  animation: flicker 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flicker {
+    animation: none;
+  }
+}

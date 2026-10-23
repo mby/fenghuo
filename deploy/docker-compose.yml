@@ -1,0 +1,30 @@
+# Fenghuo server behind a reverse proxy running on the host.
+#   docker compose up -d
+#   docker compose exec fenghuo cat /data/initial_admin_password
+services:
+  fenghuo:
+    image: ghcr.io/mby/fenghuo:latest
+    container_name: fenghuo
+    restart: unless-stopped
+    ports:
+      # Public listener: point your TLS reverse proxy at it.
+      - "127.0.0.1:8080:8080"
+      # Admin listener: reach it with `ssh -L 8081:127.0.0.1:8081 you@host`.
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - fenghuo-data:/data
+    environment:
+      # Requests arrive from the Docker bridge gateway, so trust it as a proxy
+      # to see real client IPs. Remove if nothing proxies in front of Docker.
+      FENGHUO_TRUSTED_PROXIES: "172.16.0.0/12"
+      TZ: Asia/Shanghai
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+
+volumes:
+  fenghuo-data:

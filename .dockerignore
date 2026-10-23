@@ -1,0 +1,10 @@
+.git
+.github
+bin
+dist
+data
+web/node_modules
+internal/server/webui/dist/*
+!internal/server/webui/dist/.gitkeep
+*.db
+*.db-*

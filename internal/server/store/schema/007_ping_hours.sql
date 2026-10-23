@@ -1,0 +1,8 @@
+CREATE TABLE ping_1h (
+  node_id INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+  target TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  avg_ms REAL NOT NULL,
+  loss REAL NOT NULL,
+  PRIMARY KEY (node_id, target, ts)
+) WITHOUT ROWID;

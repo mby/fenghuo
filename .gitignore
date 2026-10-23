@@ -1,0 +1,29 @@
+# Build output
+/bin/
+/dist/
+*.exe
+__pycache__/
+
+# Runtime data
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Embedded frontend build (only the placeholder is tracked)
+/internal/server/webui/dist/*
+!/internal/server/webui/dist/.gitkeep
+
+# Frontend
+/web/node_modules/
+/web/*.tsbuildinfo
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local env
+.env
+*.env.local

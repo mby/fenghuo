@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race ./...
+      - name: Staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+      - name: Vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - name: Cross-compile
+        run: |
+          for arch in amd64 arm64 arm; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch GOARM=7 go build -o /dev/null ./cmd/fenghuo-agent
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch GOARM=7 go build -o /dev/null ./cmd/fenghuo-server
+          done
+
+  web:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+
+  scripts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: ShellCheck
+        run: shellcheck deploy/*.sh deploy/tests/*.sh
+      - name: Installer regression tests
+        run: bash deploy/tests/install_test.sh
+      - name: Release archive regression tests
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'

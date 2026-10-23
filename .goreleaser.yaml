@@ -1,0 +1,91 @@
+# Builds release archives. The web UI must be built first (see release workflow):
+#   pnpm --dir web install --frozen-lockfile && pnpm --dir web build
+version: 2
+project_name: fenghuo
+
+builds:
+  - id: server
+    main: ./cmd/fenghuo-server
+    binary: fenghuo-server
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64, arm]
+    goarm: ["7"]
+    flags: [-trimpath]
+    tags: [timetzdata]
+    ldflags:
+      - -s -w -X github.com/mby/fenghuo/internal/version.Version={{ if .IsSnapshot }}{{ .Version }}{{ else }}{{ .Tag }}{{ end }}
+  - id: agent
+    main: ./cmd/fenghuo-agent
+    binary: fenghuo-agent
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64, arm]
+    goarm: ["7"]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/mby/fenghuo/internal/version.Version={{ if .IsSnapshot }}{{ .Version }}{{ else }}{{ .Tag }}{{ end }}
+
+# Archive names carry no version so that install scripts can use
+# https://github.com/mby/fenghuo/releases/latest/download/<name>.
+archives:
+  - id: server
+    ids: [server]
+    formats: [tar.gz]
+    # Checkout/build times must not change checksums when retrying a release.
+    builds_info: &binary_info
+      owner: root
+      group: root
+      mtime: "{{ .CommitDate }}"
+    name_template: "fenghuo-server_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    files:
+      - src: LICENSE
+        info: &file_info
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+      - src: docs/installation*.md
+        info: *file_info
+      - src: deploy/fenghuo-server.service
+        strip_parent: true
+        info: *file_info
+      - src: deploy/server.env.example
+        strip_parent: true
+        info: *file_info
+      - src: deploy/Caddyfile.example
+        strip_parent: true
+        info: *file_info
+  - id: agent
+    ids: [agent]
+    formats: [tar.gz]
+    builds_info: *binary_info
+    name_template: "fenghuo-agent_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    files:
+      - src: LICENSE
+        info: *file_info
+      - src: docs/installation*.md
+        info: *file_info
+      - src: deploy/fenghuo-agent.service
+        strip_parent: true
+        info: *file_info
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs"
+      - "^chore"
+      - "^ci"
+      - "^test"
+
+release:
+  prerelease: auto
+  footer: |
+    Verify a download: `sha256sum -c checksums.txt --ignore-missing`
+    Verify build provenance: `gh attestation verify <file> --repo mby/fenghuo`

@@ -1,0 +1,5 @@
+# Supply-chain hardening: only install package versions that have been
+# public for at least one day, and never run dependency install scripts
+# unless they are explicitly allowed below.
+minimumReleaseAge: 1440
+onlyBuiltDependencies: []

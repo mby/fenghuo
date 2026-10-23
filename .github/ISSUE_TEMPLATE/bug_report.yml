@@ -1,0 +1,41 @@
+name: Bug report / 问题反馈
+description: Something does not work as documented. 功能与文档描述不符。
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security issues must not be reported here. See [SECURITY.md](../blob/main/SECURITY.md).
+        安全漏洞请勿在此提交，请按 [SECURITY.md](../blob/main/SECURITY.md) 私下报告。
+  - type: input
+    id: version
+    attributes:
+      label: Version / 版本
+      description: Output of `fenghuo-server version` and `fenghuo-agent -version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component / 组件
+      options: [Server, Agent, Web UI, Install script, Docker image]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / 发生了什么？
+      description: Steps to reproduce, expected and actual behaviour. 复现步骤、预期结果与实际结果。
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment / 环境
+      description: OS, architecture, virtualization, reverse proxy. 系统、架构、虚拟化方式、反向代理。
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / 日志
+      description: "`journalctl -u fenghuo-server -n 100` or `journalctl -u fenghuo-agent -n 100`. Remove tokens and IPs. 请删除 Token 和 IP。"
+      render: text
