@@ -21,18 +21,19 @@ what the dashboard sends, the dashboard is a single key to every machine.
 from server to agent. The only thing the agent takes from a response is which
 success code it got: `204` (someone is viewing the dashboard) or `202` (nobody is).
 It uses that bit to choose between its two locally configured intervals,
-`-interval` and `-idle-interval`. The server cannot name an interval, and the worst
-a compromised server can do with it is keep agents at the normal interval. Configuration comes only from local systemd environment files:
+`-interval` and `-idle-interval`. The server cannot name an interval; a compromised
+server can keep agents at either of those locally configured intervals. Configuration comes only from local systemd environment files:
 `/etc/fenghuo/agent.env` and, optionally, `/etc/fenghuo/probes.env` for TCP targets. The admin probe preset only produces commands an operator runs locally. A test
 (`cmd/fenghuo-agent/deps_test.go`) fails the build if the agent ever depends on
 a third-party package or on `os/exec`, `plugin`, `net/rpc` and similar packages,
 or if its code calls `net.Listen` or `ListenAndServe`.
 
-**The agent has nothing worth stealing.** It runs as a systemd `DynamicUser` with an
+**The agent runs with limited privileges.** It runs as a systemd `DynamicUser` with an
 empty capability set, `ProtectSystem=strict`, `NoNewPrivileges`, `PrivateDevices`,
 `MemoryDenyWriteExecute`, a `@system-service` syscall filter and a 64 MB memory
-cap. It listens on no port and writes nothing to disk. The token is read from a
-root-only `0600` file by systemd, not from the command line.
+cap. It listens on no port and writes nothing to disk. In the installed service,
+systemd reads the token from a root-only `0600` file. During setup, a token passed
+with `--token` may appear in shell history or process arguments; protect it accordingly.
 
 **The admin surface is separate.** The server has two listeners. The public one
 (`127.0.0.1:8080` behind your TLS proxy) serves only the report endpoint and the
@@ -73,11 +74,12 @@ versions published at least a day ago and to run no install scripts.
 | --- | --- | --- |
 | The admin account or the whole server | See and fake monitoring data, delete nodes, send notifications | Run anything on agents, read files on agents, change agent configuration |
 | A node token | Submit fake metrics for that one node | Read anything, affect other nodes |
-| The network path (without TLS) | Read metrics and the token | Control the agent; this is why the agent refuses plain `http://` |
+| The network path (without TLS) | Read metrics and the token | Control the agent; plain `http://` is rejected by default except for loopback, or when explicitly enabled with `-allow-http` |
 | An agent host | Read that host's token | Reach the admin API or other nodes |
 
-The worst case for a full server compromise is a misleading dashboard. The way
-to recover is to reinstall the server and rotate node tokens.
+A full server compromise can expose monitoring data and allow an attacker to
+change or delete it, send notifications, and affect availability. Recover by
+reinstalling the server, restoring trusted backups, and rotating node tokens.
 
 ## Hardening checklist
 
@@ -99,7 +101,7 @@ To check by hand:
 sha256sum -c checksums.txt --ignore-missing
 ```
 
-Each release archive and container image also carries a GitHub build provenance
+Each release archive and container image published by this public repository also carries a GitHub build provenance
 attestation, which proves it was built by this repository's release workflow:
 
 ```bash

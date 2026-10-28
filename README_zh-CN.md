@@ -30,7 +30,6 @@
 - 公开字段控制、私有资产资料、按币种汇总费用
 - 7/30/90 天采样可用率、未知时段与故障时间线
 - 活跃会话撤销与有容量限制的管理操作审计
-
 - 有人查看时每 3 秒刷新的实时状态：CPU、内存、交换、磁盘、网速、负载、TCP/UDP 连接数、进程数、运行时间
 - 卡片和列表两种视图，一键筛选需要关注的服务器，适配手机
 - 历史图表：实时（最近约 10 分钟）、1 小时到 90 天
@@ -51,7 +50,7 @@
 
 推荐直接安装 **二进制 + systemd**，无需 Docker、Go 或 Node.js，前端已内嵌。
 完整的[二进制安装教程](docs/installation.zh-CN.md)包含手动/离线安装、TLS、备份、升级与回滚。
-安装脚本需要已有 GitHub Release；首次发布或下载测试包见教程中的 GitHub Actions 步骤。
+以下命令默认安装最新的稳定版 GitHub Release；安装预发布版本时，需用 `--version` 指定标签，详见安装教程。
 
 需要一台装有 systemd 的 Linux 服务器运行面板，以及一个指向它的域名。Agent 可运行在任何装有
 systemd 的 Linux 上（amd64、arm64、armv7）。
@@ -81,7 +80,7 @@ probe.example.com {
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/mby/fenghuo/main/deploy/docker-compose.yml
 docker compose up -d
-docker compose exec fenghuo cat /data/initial_admin_password
+docker cp fenghuo:/data/initial_admin_password - | tar -xO
 ```
 
 两个端口都只发布在 `127.0.0.1` 上，把反向代理指向 `127.0.0.1:8080` 即可。
@@ -101,32 +100,43 @@ ssh -L 8081:127.0.0.1:8081 you@your-server
 sudo cat /var/lib/fenghuo/initial_admin_password
 ```
 
+Docker 部署时使用上方的密码读取命令。
+
 然后进入**设置**：修改密码，把**公开地址**设为 `https://probe.example.com`，建议同时开启两步验证。
 
 ### 3. 添加服务器
 
 在**管理 → 服务器 → 添加服务器**中填写名称（可选填写流量额度和到期日期）。对话框会显示一次性
-Token 和安装命令：
+Token 和安装命令。生成的命令将 Token 放在参数中；如果要避免 Token 留在 shell 历史和进程参数中，
+可以先下载、查看脚本，再通过隐藏输入提供 Token：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mby/fenghuo/main/deploy/install-agent.sh \
-  | sudo bash -s -- --server https://probe.example.com --token fh_...
+curl -fsSLo install-agent.sh https://raw.githubusercontent.com/mby/fenghuo/main/deploy/install-agent.sh
+less install-agent.sh
+sudo -v
+read -r -s -p 'Agent token: ' FENGHUO_TOKEN; printf '\n'
+export FENGHUO_TOKEN
+sudo --preserve-env=FENGHUO_TOKEN bash install-agent.sh --server https://probe.example.com
+unset FENGHUO_TOKEN
 ```
 
 在要监控的机器上执行，几秒后它就会出现在状态页上。
 
-可以附加 Agent 选项，例如 TCP 延迟测试：
+运行安装命令时可附加 Agent 选项，例如 TCP 延迟测试：
 
 ```bash
-... | sudo bash -s -- --server https://probe.example.com --token fh_... \
-  --ping "电信=ct.example.com:80,联通=cu.example.com:80,移动=cm.example.com:80"
+--ping "电信=ct.example.com:80,联通=cu.example.com:80,移动=cm.example.com:80"
 ```
+
+如果 sudo 策略不允许保留该环境变量，请使用安装教程中的手动安装方法。
 
 国内机器下载 GitHub 较慢时，可以加 `--mirror https://你的GitHub加速地址/`。
 
 ## 升级
 
-先按[备份与回滚说明](docs/installation.zh-CN.md#备份升级与回滚)停服备份，再升级服务端，验证正常后升级 Agent。
+先按 [systemd 备份说明](docs/installation.zh-CN.md#备份升级与回滚)或
+[Docker 备份说明](docs/installation.zh-CN.md#docker-备份升级与回滚)停服备份，再升级服务端，
+验证正常后升级 Agent。
 
 ```bash
 # 服务端
@@ -159,7 +169,9 @@ curl -fsSL https://raw.githubusercontent.com/mby/fenghuo/main/deploy/install-ser
 | 关闭两步验证 | `sudo -u fenghuo fenghuo-server disable-totp` |
 | 备份 | [停服备份数据库、配置和旧二进制](docs/installation.zh-CN.md#备份升级与回滚) |
 
-Docker 部署时在命令前加 `docker compose exec fenghuo`。
+Docker 服务端日志使用 `docker compose logs -f fenghuo`。恢复账号时分别使用
+`docker compose exec fenghuo /usr/local/bin/fenghuo-server reset-password` 或
+`docker compose exec fenghuo /usr/local/bin/fenghuo-server disable-totp`。Agent 命令仍在各被监控主机上运行。
 
 ## UI 演示数据
 
@@ -174,6 +186,7 @@ Docker 部署时在命令前加 `docker compose exec fenghuo`。
 
 - [二进制安装与升级](docs/installation.zh-CN.md)：脚本/手动/离线安装、systemd、备份回滚、Actions 构建
 - [配置说明](docs/configuration.zh-CN.md)：服务端与 Agent 全部选项、反向代理、通知渠道、数据保留
+- [监控与管理](docs/monitoring.zh-CN.md)：状态页、告警和公开字段的行为说明
 - [安全模型](docs/security.zh-CN.md)：威胁模型、加固措施、如何校验发布文件
 - [贡献指南](CONTRIBUTING.md)：开发环境与发布流程
 - [安全策略](SECURITY.md)：如何报告漏洞

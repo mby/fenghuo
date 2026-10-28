@@ -17,7 +17,7 @@ Only the latest release receives security fixes.
 
 Fenghuo's core promise is that **a compromised server cannot run anything on
 monitored machines**, because the agent has no code path to receive commands.
-Any way to make an agent execute code, read files, change its configuration or
+Any way to make an agent execute code, read arbitrary files, change its configuration or
 open a listening socket is treated as critical.
 
 See [docs/security.md](docs/security.md) for the threat model.
@@ -38,6 +38,6 @@ See [docs/security.md](docs/security.md) for the threat model.
 ## 范围
 
 烽火的核心承诺是：**即使服务端被攻破，也无法在被监控的机器上执行任何操作**，因为 Agent
-根本没有接收指令的代码路径。任何能让 Agent 执行代码、读取文件、修改配置或监听端口的问题都视为严重漏洞。
+根本没有接收指令的代码路径。任何能让 Agent 执行代码、读取任意文件、修改配置或监听端口的问题都视为严重漏洞。
 
 威胁模型见 [docs/security.zh-CN.md](docs/security.zh-CN.md)。

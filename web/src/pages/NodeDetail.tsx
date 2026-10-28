@@ -187,18 +187,24 @@ function Header({ node }: { node: PublicNode }) {
 
   return (
     <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="text-2xl font-medium tracking-tight sm:text-3xl">{node.name}</h1>
+      <div className="min-w-0 w-full sm:w-auto sm:flex-1">
+        <h1 className="break-words text-2xl font-medium tracking-tight sm:text-3xl">{node.name}</h1>
         <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <StatusDot state={pending ? "pending" : problems.length ? "lit" : "ok"} />
           <span className={cn(problems.length > 0 && "text-ember")}>
             {[status, ...problems.filter((p) => p !== "offline").map((p) => t(`issue.${p}`))].join(listSep(lang))}
           </span>
-          {node.group && <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs">{node.group}</span>}
+          {node.group && (
+            <span className="max-w-full break-words rounded-md bg-muted px-1.5 py-0.5 text-xs">{node.group}</span>
+          )}
         </p>
         <NodeTags value={node.public_tags} className="mt-3" />
       </div>
-      {node.public_note && <p className="max-w-prose text-sm text-muted-foreground">{node.public_note}</p>}
+      {node.public_note && (
+        <p className="min-w-0 w-full max-w-prose break-words text-sm text-muted-foreground sm:w-auto">
+          {node.public_note}
+        </p>
+      )}
     </div>
   );
 }
@@ -249,7 +255,7 @@ function InfoGrid({ node }: { node: PublicNode }) {
   }
 
   return (
-    <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border bg-card p-4 text-sm sm:mt-6 sm:gap-x-8 lg:grid-cols-3">
+    <dl className="mt-5 grid grid-cols-1 gap-x-4 gap-y-3 rounded-xl border bg-card p-4 text-sm min-[380px]:grid-cols-2 sm:mt-6 sm:gap-x-8 lg:grid-cols-3">
       {items.map(([k, v]) => (
         <div key={k} className="min-w-0">
           <dt className="text-xs text-muted-foreground">{k}</dt>
@@ -259,7 +265,7 @@ function InfoGrid({ node }: { node: PublicNode }) {
         </div>
       ))}
       {node.visibility.traffic && (
-        <div className="col-span-2 min-w-0 lg:col-span-3">
+        <div className="min-w-0 min-[380px]:col-span-2 lg:col-span-3">
           <dt className="text-xs text-muted-foreground">{t("node.traffic")}</dt>
           <dd className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1 tabular-nums">
             <TrafficFigures traffic={tr} />

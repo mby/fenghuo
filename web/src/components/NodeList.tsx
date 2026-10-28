@@ -1,4 +1,6 @@
+import { Info } from "lucide-react";
 import { NodeDetailLink } from "@/components/NodeDetailLink";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { issueText, summaryLine } from "@/lib/display";
 import { bytes, dateTime, duration, ratio } from "@/lib/format";
 import { isPending, issues } from "@/lib/health";
@@ -135,77 +137,118 @@ function NodeRow({ node, now }: { node: PublicNode; now: number }) {
   );
 
   return (
-    <NodeDetailLink
-      uuid={node.uuid}
-      className={cn(
-        "block px-4 py-3 transition-colors hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
-        lit && "shadow-[inset_1px_0_0_var(--ember)]",
-      )}
-    >
-      {/* Wide screens: one aligned row. */}
-      <div className={cn("hidden items-center gap-4 xl:grid", COLUMNS)}>
-        {metadata}
-        {pending || !s ? (
-          <div className="col-span-3">{missingMetrics}</div>
-        ) : (
-          <>
-            <UsageMeter pct={cpu} detail={load} detailLabel={t("list.loadMinutes")} />
-            <UsageMeter pct={mem} detail={memDetail} />
-            <UsageMeter pct={disk} detail={diskDetail} />
-          </>
+    <div className="relative">
+      <NodeDetailLink
+        uuid={node.uuid}
+        className={cn(
+          "block px-4 py-3 transition-colors hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+          lit && "shadow-[inset_1px_0_0_var(--ember)]",
         )}
-        <NetRates node={node} stacked className="text-xs text-muted-foreground" />
-        <div className="grid gap-0.5 text-xs text-muted-foreground">
-          {isVisible(node, "traffic") ? (
-            <>
-              <TrafficFigures traffic={tr} />
-              <QuotaText traffic={tr} />
-            </>
+      >
+        {/* Wide screens: one aligned row. */}
+        <div className={cn("hidden items-center gap-4 xl:grid", COLUMNS)}>
+          {metadata}
+          {pending || !s ? (
+            <div className="col-span-3">{missingMetrics}</div>
           ) : (
-            <span>{t("compare.notAvailable")}</span>
+            <>
+              <UsageMeter pct={cpu} detail={load} detailLabel={t("list.loadMinutes")} />
+              <UsageMeter pct={mem} detail={memDetail} />
+              <UsageMeter pct={disk} detail={diskDetail} />
+            </>
+          )}
+          <NetRates node={node} stacked className="text-xs text-muted-foreground" />
+          <div className="grid gap-0.5 text-xs text-muted-foreground">
+            {isVisible(node, "traffic") ? (
+              <>
+                <TrafficFigures traffic={tr} />
+                <QuotaText traffic={tr} />
+              </>
+            ) : (
+              <span>{t("compare.notAvailable")}</span>
+            )}
+          </div>
+          <div className="grid justify-items-start gap-0.5 text-xs tabular-nums text-muted-foreground">
+            <span>{uptime}</span>
+            {isVisible(node, "expiry") && <Expiry node={node} now={now} />}
+          </div>
+        </div>
+
+        {/* Narrow screens retain the same information in stacked groups. */}
+        <div className="xl:hidden">
+          <div className={cn(s && !pending && "pe-10")}>{metadata}</div>
+          {pending ? (
+            <p className="mt-1 ps-4 text-xs text-muted-foreground">{t("node.pending")}</p>
+          ) : (
+            <>
+              {s ? (
+                <div className="mt-3 grid grid-cols-3 gap-x-3 ps-4">
+                  <UsageMeter label={t("metric.cpu")} pct={cpu} detail={load} detailLabel={t("list.loadMinutes")} />
+                  <UsageMeter label={t("metric.mem")} pct={mem} detail={memDetail} />
+                  <UsageMeter label={t("metric.disk")} pct={disk} detail={diskDetail} />
+                </div>
+              ) : (
+                <div className="mt-2 ps-4">{missingMetrics}</div>
+              )}
+              {s && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 ps-4 text-xs text-muted-foreground">
+                  <NetRates node={node} />
+                  <span>{t("node.uptime", { d: uptime })}</span>
+                </div>
+              )}
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 ps-4 text-xs text-muted-foreground">
+                {isVisible(node, "traffic") && (
+                  <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                    {t("node.traffic")}
+                    <TrafficFigures traffic={tr} />
+                    <QuotaText traffic={tr} />
+                  </span>
+                )}
+                {isVisible(node, "expiry") && <Expiry node={node} now={now} />}
+              </div>
+            </>
           )}
         </div>
-        <div className="grid justify-items-start gap-0.5 text-xs tabular-nums text-muted-foreground">
-          <span>{uptime}</span>
-          {isVisible(node, "expiry") && <Expiry node={node} now={now} />}
-        </div>
-      </div>
-
-      {/* Narrow screens retain the same information in stacked groups. */}
-      <div className="xl:hidden">
-        {metadata}
-        {pending ? (
-          <p className="mt-1 ps-4 text-xs text-muted-foreground">{t("node.pending")}</p>
-        ) : (
-          <>
-            {s ? (
-              <div className="mt-3 grid grid-cols-3 gap-x-3 ps-4">
-                <UsageMeter label={t("metric.cpu")} pct={cpu} detail={load} detailLabel={t("list.loadMinutes")} />
-                <UsageMeter label={t("metric.mem")} pct={mem} detail={memDetail} />
-                <UsageMeter label={t("metric.disk")} pct={disk} detail={diskDetail} />
+      </NodeDetailLink>
+      {s && !pending && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label={t("list.usageDetailsFor", { name: node.name })}
+              title={t("list.usageDetails")}
+              className="absolute end-1 top-1 inline-flex size-10 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring xl:hidden"
+            >
+              <Info className="size-4" aria-hidden />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" aria-label={t("list.usageDetailsFor", { name: node.name })}>
+            <p className="font-medium">{t("list.usageDetails")}</p>
+            <dl className="mt-2 grid gap-2 tabular-nums">
+              <div>
+                <dt className="font-medium">
+                  {t("metric.cpu")} · {Math.round(cpu)}%
+                </dt>
+                <dd className="break-words text-muted-foreground [overflow-wrap:anywhere]">
+                  {t("list.loadMinutes")}: {load}
+                </dd>
               </div>
-            ) : (
-              <div className="mt-2 ps-4">{missingMetrics}</div>
-            )}
-            {s && (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 ps-4 text-xs text-muted-foreground">
-                <NetRates node={node} />
-                <span>{t("node.uptime", { d: uptime })}</span>
+              <div>
+                <dt className="font-medium">
+                  {t("metric.mem")} · {Math.round(mem)}%
+                </dt>
+                <dd className="break-words text-muted-foreground [overflow-wrap:anywhere]">{memDetail}</dd>
               </div>
-            )}
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 ps-4 text-xs text-muted-foreground">
-              {isVisible(node, "traffic") && (
-                <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
-                  {t("node.traffic")}
-                  <TrafficFigures traffic={tr} />
-                  <QuotaText traffic={tr} />
-                </span>
-              )}
-              {isVisible(node, "expiry") && <Expiry node={node} now={now} />}
-            </div>
-          </>
-        )}
-      </div>
-    </NodeDetailLink>
+              <div>
+                <dt className="font-medium">
+                  {t("metric.disk")} · {Math.round(disk)}%
+                </dt>
+                <dd className="break-words text-muted-foreground [overflow-wrap:anywhere]">{diskDetail}</dd>
+              </div>
+            </dl>
+          </PopoverContent>
+        </Popover>
+      )}
+    </div>
   );
 }

@@ -56,9 +56,12 @@ The admin listener has no business being on the internet. Pick one:
 
 ### Reverse proxies
 
-The server must see the real client address only for login rate limiting and the
-IP shown in the admin list. By default it trusts forwarding headers from loopback,
-which fits a proxy on the same host.
+The server uses client addresses for login rate limiting and administrator records,
+including node IPs, sessions and security audit events. It accepts forwarding headers
+only from a trusted direct peer. For `X-Forwarded-For`, it scans the addresses from
+right to left and uses the first address that is not a trusted proxy. It stops on
+an invalid address; if no valid untrusted address is found, it uses the direct peer.
+By default it trusts loopback, which fits a proxy on the same host.
 
 Caddy:
 
@@ -88,9 +91,43 @@ server {
 }
 ```
 
-Behind Cloudflare, add [Cloudflare's IP ranges](https://www.cloudflare.com/ips/)
-to `-trusted-proxies` as well. In Docker, requests arrive from the bridge gateway,
-which is why the compose file trusts `172.16.0.0/12`.
+For **Cloudflare → nginx → Fenghuo**, the nginx example overwrites
+`X-Forwarded-For` with `$remote_addr`. Without real-IP configuration this is the
+Cloudflare edge address, so adding Cloudflare ranges to Fenghuo's
+`-trusted-proxies` alone cannot recover the visitor address.
+
+Configure nginx's [real-IP module](https://nginx.org/en/docs/http/ngx_http_realip_module.html)
+and retain the `proxy_set_header X-Forwarded-For $remote_addr` line above:
+
+1. Create `/etc/nginx/cloudflare-real-ip.conf` with one
+   `set_real_ip_from <CIDR>;` directive for every current
+   [Cloudflare IPv4 and IPv6 range](https://www.cloudflare.com/ips/); keep the
+   list updated. Trust only the proxy sources that actually connect to nginx.
+2. Add the following in nginx's `http` or applicable `server` block:
+
+   ```nginx
+   include /etc/nginx/cloudflare-real-ip.conf;
+   real_ip_header CF-Connecting-IP;
+   ```
+
+3. Check with `nginx -t`, reload nginx, and compare a node's recorded IP or an
+   admin session IP with the actual public client IP. If direct origin access is
+   allowed, also check that a forged `CF-Connecting-IP` from a non-Cloudflare
+   address cannot change the recorded IP.
+
+The module accepts `CF-Connecting-IP` only from the configured sources; nginx
+then sends the restored address in `X-Forwarded-For`. Keep Cloudflare's visitor IP
+headers enabled. Pseudo IPv4 in overwrite mode substitutes a pseudo IPv4 address
+for an IPv6 visitor; Workers and other proxy arrangements can also affect the
+header. See [Cloudflare's header documentation](https://developers.cloudflare.com/fundamentals/reference/http-headers/).
+For a Cloudflare-only origin, restrict access and consider authenticating your own
+zone with a custom certificate for Authenticated Origin Pulls.
+
+Fenghuo's `-trusted-proxies` must include its **direct** proxy, normally loopback
+for a local nginx. Cloudflare ranges belong in nginx's real-IP trust list for this
+setup; adding them to Fenghuo does not replace the nginx configuration. In Docker,
+the compose example trusts `172.16.0.0/12` for the bridge gateway. Check the
+address Fenghuo actually sees and limit trust to the necessary proxy addresses.
 
 ### Storage and retention
 
@@ -188,9 +225,10 @@ While a browser has the status page or admin UI open, agents report every
 `-interval` (3s). When nobody has looked for 15 seconds, they slow down to
 `-idle-interval` (15s), reducing the number of reports by about 80%. Opening the page
 switches them back within one idle interval. CPU usage and network speed are
-computed from counter deltas, so an idle report is the average over its 15
-seconds, and no traffic is missed. Offline detection follows the interval the
-agent is on: three missed reports.
+computed from counter deltas, so an idle report reflects the average over its
+sampling interval. See traffic accounting below for cumulative totals and their
+limitations. Offline detection follows the interval the agent is on: three missed
+reports.
 
 ### Traffic accounting
 
@@ -204,9 +242,24 @@ By default every interface except loopback and virtual ones (`docker*`, `veth*`,
 counted. These carry traffic that is already counted on a physical interface. If
 your provider's counter disagrees, list the interface explicitly, for example `FENGHUO_NIC=eth0`.
 
-The agent reports cumulative counters since boot, and the server computes the
-difference. Reboots and server restarts don't lose traffic, but traffic sent
-while the agent is stopped is not counted.
+The agent reports cumulative counters for the selected interfaces since boot. The
+node's first report establishes a baseline; earlier traffic is not counted. On later
+reports during the same boot, if neither reported total has decreased, the server
+adds the difference since the last accepted report. This includes traffic while
+the agent was stopped or unable to report, once it resumes; it does not recreate
+missing per-minute speed history.
+
+If either total decreases without a reboot, for example after an interface is
+removed or the selected interfaces change, the server establishes a new baseline
+and adds nothing for that interval in either direction. After a reboot it counts
+the totals since the most recent boot, but cannot recover traffic between the last
+report and that reboot. If a reporting gap crosses a billing reset, the difference
+is added to the current period as a whole, rather than split at the boundary.
+
+Traffic state is normally saved every minute and on a clean server shutdown.
+After a server restart, counting resumes from the last saved baseline; traffic
+that cannot be reconstructed from that baseline and the subsequent counters is
+not guaranteed to survive.
 
 ### Without systemd
 

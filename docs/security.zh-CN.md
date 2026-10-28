@@ -15,14 +15,14 @@
 **Agent 无法被控制。** 它只是一个循环：读取 `/proc`，向 `/api/v1/report` POST JSON，丢弃响应体。
 协议中不存在从服务端到 Agent 的消息类型。Agent 从响应中唯一获取的是成功状态码：`204`（有人在查看面板）
 或 `202`（没人查看），并据此在本地配置的两个间隔 `-interval` 和 `-idle-interval` 之间切换。服务端无法
-指定任何间隔数值，服务端被攻破时，利用这个信号最多只能让 Agent 一直按正常间隔上报。配置只来自本机 systemd 环境文件：`/etc/fenghuo/agent.env`，以及可选的 TCP 探测文件 `/etc/fenghuo/probes.env`。
+指定任何间隔数值；服务端被攻破时，攻击者只能通过这个信号让 Agent 按本机配置的正常或空闲间隔上报。配置只来自本机 systemd 环境文件：`/etc/fenghuo/agent.env`，以及可选的 TCP 探测文件 `/etc/fenghuo/probes.env`。
 后台探测模板仅生成由管理员在本机执行的命令。测试 `cmd/fenghuo-agent/deps_test.go` 会在以下情况让构建失败：Agent 依赖了第三方包，依赖了
 `os/exec`、`plugin`、`net/rpc` 等包，或代码中调用了 `net.Listen`、`ListenAndServe`。
 
-**Agent 上没有值得窃取的东西。** 它以 systemd `DynamicUser` 运行：capability 为空，
+**Agent 以受限权限运行。** 它以 systemd `DynamicUser` 运行：capability 为空，
 `ProtectSystem=strict`、`NoNewPrivileges`、`PrivateDevices`、`MemoryDenyWriteExecute`，系统调用限制在
-`@system-service`，内存上限 64 MB。它不监听端口，不写磁盘。Token 由 systemd 从仅 root 可读的 `0600`
-文件中读取，不出现在命令行里。
+`@system-service`，内存上限 64 MB。它不监听端口，不写磁盘。安装后的服务由 systemd 从仅 root 可读的
+`0600` 文件中读取 Token。安装时通过 `--token` 传入的 Token 可能出现在 shell 历史或进程参数中，需要妥善保护。
 
 **管理入口是隔离的。** 服务端有两个监听端口。公开端口（`127.0.0.1:8080`，放在你的 TLS 代理后面）
 只提供上报接口和只读状态 API，管理 API 在这里根本没有注册。管理 API 位于第二个监听端口
@@ -54,10 +54,11 @@
 | --- | --- | --- |
 | 管理员账号或整个服务端 | 查看、伪造监控数据，删除节点，发送通知 | 在 Agent 上执行任何操作、读取 Agent 上的文件、修改 Agent 配置 |
 | 某个节点的 Token | 为该节点提交伪造数据 | 读取任何数据，影响其他节点 |
-| 网络链路（未使用 TLS） | 读取监控数据和 Token | 控制 Agent；这也是 Agent 拒绝明文 `http://` 的原因 |
+| 网络链路（未使用 TLS） | 读取监控数据和 Token | 控制 Agent；默认拒绝明文 `http://`，回环地址或明确启用 `-allow-http` 时除外 |
 | 某台 Agent 主机 | 读取该主机的 Token | 访问管理 API 或其他节点 |
 
-服务端被完全攻破时，最坏结果是看到一个被篡改的面板。恢复方法是重装服务端并重置各节点 Token。
+服务端被完全攻破时，监控数据可能泄露、被篡改或删除；攻击者也可能发送通知或影响服务可用性。
+恢复时应重装服务端、从可信备份恢复数据，并重置各节点 Token。
 
 ## 加固清单
 
@@ -77,7 +78,7 @@
 sha256sum -c checksums.txt --ignore-missing
 ```
 
-每个发布压缩包和容器镜像都附带 GitHub 构建来源证明（build provenance），可以证明它由本仓库的发布
+本公开仓库发布的压缩包和容器镜像附带 GitHub 构建来源证明（build provenance），可以证明它由本仓库的发布
 工作流构建：
 
 ```bash

@@ -12,6 +12,11 @@ file access, remote configuration, auto-update) will not be accepted. Read
 [AGENTS.md](AGENTS.md) for the architecture, conventions and security rules;
 they apply to human contributors too.
 
+For bugs and documentation improvements, use the repository's issue templates.
+Report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+To contribute, fork the repository, create a branch, and open a pull request against
+`main`. Ask a maintainer before adding any Go or npm dependency.
+
 ### Development setup
 
 Requirements: Go 1.27.3+, Node.js 24+, pnpm 11, Python 3.11+ and Bash. Python checks use only the standard library.
@@ -49,9 +54,12 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 2. Tag and push: `git tag v1.2.3 && git push origin v1.2.3`.
 3. The release workflow runs `make check`, builds six Linux archives (Server/Agent for
    amd64, arm64 and armv7), verifies checksums and archive contents, and smoke tests
-   the amd64 binaries, embedded frontend and separate listeners. Public repositories and
-   opted-in private repositories generate provenance before publishing the Release.
+   the amd64 binaries, embedded frontend and separate listeners. For this public
+   repository, it generates build provenance before publishing the Release.
    The multi-arch image job runs after binary publication.
+
+Tags containing a hyphen produce prereleases. The default installer and the Docker
+`latest` tag use stable releases; install a prerelease by selecting its tag explicitly.
 
 Pushes to `main` automatically run **Build binaries** without publishing. To select a
 branch manually, use Actions → **Build binaries** → **Run workflow**.
@@ -77,6 +85,10 @@ Upgrade the server before agents: the server rejects report fields it does not k
 烽火刻意保持精简。实现新功能前请先开 Issue 讨论。任何让服务端控制 Agent 的功能（命令、终端、
 文件访问、远程配置、自动更新）都不会被接受。请阅读 [AGENTS.md](AGENTS.md) 了解架构、约定和安全
 红线，这些同样适用于人类贡献者。
+
+问题和文档改进可使用仓库的 Issue 模板；安全漏洞请按 [SECURITY.md](SECURITY.md) 私下报告。
+参与贡献时，请先 Fork 仓库、创建分支，再向 `main` 提交 Pull Request。添加 Go 或 npm 依赖前，
+请先征求维护者同意。
 
 ### 开发环境
 
@@ -113,8 +125,10 @@ Go 的最低补丁版本包含 `govulncheck` 要求的标准库安全修复。
 1. 确认 `main` 分支 CI 全部通过。
 2. 打 tag 并推送：`git tag v1.2.3 && git push origin v1.2.3`。
 3. Release 工作流运行 `make check`，构建六个 Linux 安装包（Server/Agent，各有 amd64、arm64、armv7），
-   检查校验和及包内文件，启动 amd64 二进制检查内嵌前端和双监听器；公开仓库或已启用私有来源证明时，生成证明后才发布 Release。
+   检查校验和及包内文件，启动 amd64 二进制检查内嵌前端和双监听器；本公开仓库生成构建来源证明后发布 Release。
    原有多架构镜像任务在二进制发布成功后运行。
+
+带连字符的标签会生成预发布版本。默认安装脚本和 Docker 的 `latest` 标签使用稳定版；安装预发布版时需明确指定标签。
 
 推送 `main` 自动触发 **Build binaries** 生成测试包，也可用 Actions → **Build binaries** → **Run workflow** 手动选择分支。在该次运行的 Artifacts
 下载 `fenghuo-linux-<完整提交 SHA>`（保留 14 天）。这些包的版本带 `SNAPSHOT`，附带安装教程，

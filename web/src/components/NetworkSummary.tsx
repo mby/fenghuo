@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { useRef, useState } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { clock } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
@@ -11,50 +13,73 @@ const failureText = (v: number | null) => (v == null ? "—" : `${Number(v.toFix
 
 export function NetworkSummary({ probes, now }: { probes: NetworkProbe[]; now: number }) {
   const { t } = useI18n();
+  const popoverRef = useRef<HTMLDivElement>(null);
   const overview = networkOverview(probes, now);
   if (overview.probes.length === 0) return null;
 
   return (
-    <section className="relative z-10 grid gap-2 border-t pt-2.5 text-xs" aria-label={t("network.cardTitle")}>
-      <div className="flex items-center justify-between gap-3">
-        <span className="shrink-0 text-muted-foreground">{t("network.probesShort")}</span>
-        <div className="flex min-w-0 items-center justify-end gap-2">
-          {overview.probes.map((probe) => (
-            <Tooltip key={probe.target}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="min-w-0 cursor-help text-right tabular-nums"
-                  aria-label={`${probe.target}: ${latencyText(probe.latency_fresh && probe.avg_ms >= 0 ? probe.avg_ms : null)}`}
-                >
-                  <span className="block max-w-20 truncate text-[10px] text-muted-foreground">{probe.target}</span>
-                  <span className={cn("font-medium", probe.failure_rate >= 20 && "text-ember")}>
-                    {latencyText(probe.latency_fresh && probe.avg_ms >= 0 ? probe.avg_ms : null)}
-                  </span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent sideOffset={6} className="max-w-64 text-left leading-relaxed">
-                <p className="font-medium">{probe.target}</p>
-                <p>
-                  {t("network.averageLatency")}:{" "}
+    <section className="border-t pt-2.5 text-xs" aria-label={t("network.cardTitle")}>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="group relative z-10 flex w-full cursor-pointer items-center justify-between gap-2 rounded text-left text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <span>{t("network.probesShort")}</span>
+            <span className="flex min-w-0 items-center gap-1 whitespace-nowrap tabular-nums">
+              <span>
+                {t("network.latencyShort")} {latencyText(overview.latency)}
+              </span>
+              <span aria-hidden>·</span>
+              <span className={cn((overview.worstFailure ?? 0) >= 20 && "text-ember")}>
+                {t("network.maxFailShort")} {failureText(overview.worstFailure)}
+              </span>
+              <ChevronDown
+                className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-180"
+                aria-hidden
+              />
+            </span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          ref={popoverRef}
+          tabIndex={-1}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            popoverRef.current?.focus();
+          }}
+          align="end"
+          aria-label={t("network.cardTitle")}
+          className="grid max-h-[var(--radix-popover-content-available-height)] w-72 gap-2 overflow-y-auto"
+        >
+          <p className="font-medium">{t("network.cardTitle")}</p>
+          <div className="grid gap-1 tabular-nums">
+            <div className="grid grid-cols-[minmax(0,1fr)_4rem_3rem] gap-2 border-b pb-1 text-[10px] text-muted-foreground">
+              <span>{t("network.probesShort")}</span>
+              <span className="text-right">{t("network.latencyShort")}</span>
+              <span className="text-right">{t("network.failShort")}</span>
+            </div>
+            {overview.probes.map((probe) => (
+              <div key={probe.target} className="grid grid-cols-[minmax(0,1fr)_4rem_3rem] gap-2">
+                <span className="min-w-0 break-words [overflow-wrap:anywhere]">{probe.target}</span>
+                <span className="text-right">
                   {latencyText(probe.latency_fresh && probe.avg_ms >= 0 ? probe.avg_ms : null)}
-                </p>
-                <p>
-                  {t("network.failureRate")}: {failureText(probe.failure_rate)}
-                </p>
-                <p className="mt-1">{t("network.windowHint")}</p>
-                <p>{t("network.tcpHint")}</p>
-              </TooltipContent>
-            </Tooltip>
-          ))}
-        </div>
-      </div>
-      {overview.samples > 0 && (
-        <div className="grid grid-cols-2 gap-3">
-          <ProbeStrip kind="latency" overview={overview} />
-          <ProbeStrip kind="failure" overview={overview} />
-        </div>
-      )}
+                </span>
+                <span className={cn("text-right", probe.failure_rate >= 20 && "text-ember")}>
+                  {failureText(probe.failure_rate)}
+                </span>
+              </div>
+            ))}
+          </div>
+          {overview.samples > 0 && (
+            <div className="grid grid-cols-2 gap-3 border-t pt-2">
+              <ProbeStrip kind="latency" overview={overview} />
+              <ProbeStrip kind="failure" overview={overview} />
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground">{t("network.tcpHint")}</p>
+        </PopoverContent>
+      </Popover>
     </section>
   );
 }

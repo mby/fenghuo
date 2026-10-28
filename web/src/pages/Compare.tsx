@@ -347,6 +347,7 @@ function CurrentSpecs({ nodes }: { nodes: PublicNode[] }) {
   return (
     <section>
       <h2 className="mb-3 text-lg font-medium">{t("compare.current")}</h2>
+      {nodes.length > 1 && <p className="mb-2 text-xs text-muted-foreground sm:hidden">{t("compare.swipeHint")}</p>}
       <section
         className="overflow-x-auto rounded-xl border bg-card"
         // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll the comparison table horizontally.

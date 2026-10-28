@@ -18,7 +18,14 @@ test("card averages weight actual attempts and successful connections separately
   const result = networkOverview([probe("CT", 10, 9, 20), probe("CU", 2, 1, 100)], now);
   assert.equal(result.latency, 28);
   assert.ok(Math.abs(result.failure - 100 / 6) < 1e-10);
+  assert.equal(result.worstFailure, 50);
   assert.equal(result.samples, 12);
+});
+
+test("compact probe summary exposes a failing target hidden by the combined rate", () => {
+  const result = networkOverview([probe("healthy", 9, 9, 20), probe("failing", 1, 0, -1)], now);
+  assert.equal(result.failure, 10);
+  assert.equal(result.worstFailure, 100);
 });
 
 test("card history aligns buckets, leaves gaps unknown and preserves all-failed attempts", () => {
@@ -52,9 +59,11 @@ test("only the first three fresh targets contribute; old API data stays unknown"
   );
   assert.equal(result.latency, 20);
   assert.equal(result.failure, 0);
+  assert.equal(result.worstFailure, 0);
   const old = networkOverview([{ target: "old", avg_ms: 20, failure_rate: 0, fresh: true, latency_fresh: true }], now);
   assert.equal(old.latency, null);
   assert.equal(old.failure, null);
+  assert.equal(old.worstFailure, null);
   assert.equal(networkOverview([], now).samples, 0);
   assert.equal(networkOverview([{ ...probe("failures", 3, 1, 10), latency_fresh: false }], now).latency, null);
 });

@@ -156,20 +156,22 @@ export function Servers() {
                 <li key={n.id} className="flex items-start gap-3 px-4 py-3">
                   <StatusDot state={pending ? "pending" : lit ? "lit" : "ok"} className="mt-1.5" />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 font-medium">
-                      <span className="truncate">{n.name}</span>
+                    <div className="flex min-w-0 items-center gap-2 font-medium">
+                      <span className="min-w-0 flex-1 truncate" title={n.name}>
+                        {n.name}
+                      </span>
                       {n.hidden && (
                         <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("servers.hidden")} />
                       )}
-                      {n.group && (
-                        <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
-                          {n.group}
-                        </span>
-                      )}
                     </div>
+                    {n.group && (
+                      <span className="mt-1 block w-fit max-w-full break-words rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                        {n.group}
+                      </span>
+                    )}
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
                       <span>{pending ? t("node.pending") : n.online ? t("node.online") : t("node.offline")}</span>
-                      {n.last_ip && <span className="font-mono">{n.last_ip}</span>}
+                      {n.last_ip && <span className="min-w-0 break-all font-mono">{n.last_ip}</span>}
                       {n.info.agent_version && <span>{n.info.agent_version}</span>}
                       <TrafficFigures traffic={n.traffic} />
                       <QuotaText traffic={n.traffic} />

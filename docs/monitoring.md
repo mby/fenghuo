@@ -31,16 +31,24 @@ bucket size to identify gaps; demo data uses the same cadence and covers the ful
 Missing records break the curve instead of becoming zero values. All-failed buckets
 retain their failure rate while latency remains unknown.
 
-Homepage cards use compact columns with natural heights. Public descriptions move
-into a hint beside the name, and tags sit at the bottom. Clicking a homepage card
+Homepage cards use a narrower grid with equal heights within each row. Attention reasons move into
+a tap- and keyboard-accessible hint beside the name; public descriptions have a separate hint,
+names stay on one line with an ellipsis when needed, and hovering shows the full name.
+Tags sit at the bottom. Offline cards use a muted panel
+for their paused-state message, last report time and a detail link. Traffic totals and
+a short expiration label share one footer line; the exact expiration remains in its hint. Clicking a homepage card
 or list row opens details in a dialog. Closing it, pressing Escape or using browser
 Back preserves dashboard filters, sorting and scroll position. Direct detail links
-and the Full page action still provide a standalone page. The network section shows
-up to three targets' five-minute average latencies; hover to see each failure rate
-and its calculation. Combined averages include only the displayed targets, weighted
+and the Full page action still provide a standalone page. The network section defaults
+to a compact five-minute combined latency and highest target failure rate; open the
+probe popover to see up to three targets, their details and the short history strips
+without changing card height. Long target names wrap in the popover, which can be
+scrolled when necessary. Combined averages include only
+the displayed targets, weighted
 by successful connections for latency and by total attempts for failures.
-Each history block covers 30 seconds; hover or use arrow keys to inspect its values
-and target coverage. Missing blocks stay unknown. These strips reuse the memory
+Each history block covers 30 seconds. Opening the popover leaves the strip hints hidden;
+hover a strip or focus it with the keyboard to inspect its values and target coverage.
+Arrow keys select a block. Missing blocks stay unknown. These strips reuse the memory
 window (at most 11 buckets per target), travel in the existing node response, obey
 the public-probe visibility setting and add no database storage or requests.
 
@@ -101,9 +109,13 @@ also covers private asset fields for administrators. Sort options handle missing
 or hidden values. Select up to four visible nodes for timestamp-aligned live or
 historical comparison. A shared URL identifies nodes and range, but grants no
 additional permission and does not reveal hidden nodes.
+On narrow screens, swipe the current-resources table sideways to see the other
+servers; node details use a single-column information layout on very narrow screens.
 
 ## Node cards and public tags
 
+Cards arrange live CPU, memory, disk and (when set) traffic quota in two unboxed columns,
+with CPU load beneath its meter. Network rates and uptime share a compact row.
 Cards condense CPU core count and total memory into the system line, for example
 `Debian 13 / amd64 / 2C4G / kvm`, without a separate configuration block or repeated disk capacity.
 Online nodes show CPU usage, used/total memory and disk space, network rates and uptime.
@@ -123,6 +135,9 @@ List rows retain the same configuration, public tags, notes, usage, traffic quot
 information as cards. Alerts appear separately instead of replacing descriptions. Narrow screens
 stack these groups to avoid squeezing them into desktop columns.
 The CPU column also shows the latest 1/5/15-minute load averages below its usage meter for online nodes.
+On narrow list rows, activate the information button to see the full CPU load and
+memory and disk usage details. The button works with touch and keyboard; the rest
+of the row still opens node details.
 
 Hover over the traffic quota or traffic totals in either view to see the next reset date and time,
 including the server's UTC offset at that instant. Set each node's reset day to 1–31; for purchase-day
@@ -148,8 +163,8 @@ events; this local audit is not tamper-proof against a compromised server.
 
 ## Upgrade and verification
 
-Upgrade the server first. New schema migrations 002–006 are additive; do not edit
-the released 001 migration. Existing agents keep their local interval/configuration.
+Upgrade the server first. Schema migrations are additive; released migrations are not
+modified. Existing agents keep their local interval/configuration.
 No agent dependency, inbound listener, disk write, command or update channel is added.
 Back up the database before upgrading; older binaries cannot use new schema safely.
 

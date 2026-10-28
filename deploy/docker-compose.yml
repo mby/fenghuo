@@ -1,6 +1,6 @@
 # Fenghuo server behind a reverse proxy running on the host.
 #   docker compose up -d
-#   docker compose exec fenghuo cat /data/initial_admin_password
+#   docker cp fenghuo:/data/initial_admin_password - | tar -xO
 services:
   fenghuo:
     image: ghcr.io/mby/fenghuo:latest

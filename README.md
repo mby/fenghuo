@@ -41,7 +41,6 @@ it:
 - Public field controls, private asset records and costs grouped by currency
 - 7/30/90-day observed availability with explicit unknown periods and outage timelines
 - Active-session revocation and bounded administrator audit history
-
 - Live status every 3 seconds while you watch: CPU, memory, swap, disk, network
   speed, load, TCP/UDP connections, processes, uptime
 - Card and list views, a one-click "needs attention" filter, works on phones
@@ -69,8 +68,8 @@ scheduled tasks, auto-update, plugins, multi-user roles.
 
 Install **binaries with systemd** directly: no Docker, Go or Node.js is needed; the frontend is embedded.
 The [binary installation guide](docs/installation.md) covers manual/offline installation, TLS, backups,
-upgrades and rollback. Installers require an existing GitHub Release; see the guide's Actions steps
-to create the first release or download a test build.
+upgrades and rollback. The commands below install the latest stable GitHub Release. To install a
+prerelease, specify its tag with `--version`; see the installation guide for details.
 
 You need one Linux server with systemd for the dashboard and a domain name
 pointing at it. Agents run on any Linux machine with systemd (amd64, arm64, armv7).
@@ -101,7 +100,7 @@ probe.example.com {
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/mby/fenghuo/main/deploy/docker-compose.yml
 docker compose up -d
-docker compose exec fenghuo cat /data/initial_admin_password
+docker cp fenghuo:/data/initial_admin_password - | tar -xO
 ```
 
 Both ports are published on `127.0.0.1` only. Point your reverse proxy at `127.0.0.1:8080`.
@@ -121,35 +120,48 @@ Visit <http://127.0.0.1:8081/login> and sign in as `admin` with the password fro
 sudo cat /var/lib/fenghuo/initial_admin_password
 ```
 
+For Docker, use the password command shown above.
+
 Then go to **Settings**: change the password, set **Public URL** to
 `https://probe.example.com`, and consider turning on two-factor authentication.
 
 ### 3. Add servers
 
 In **Admin → Servers → Add server**, fill in a name (and optionally traffic
-quota and expiry date). The dialog shows a one-time token and an install command:
+quota and expiry date). The dialog shows a one-time token and an install command.
+The generated command includes the token as an argument; to keep it out of shell
+history and process arguments, download and inspect the script, then enter the token
+using hidden input:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mby/fenghuo/main/deploy/install-agent.sh \
-  | sudo bash -s -- --server https://probe.example.com --token fh_...
+curl -fsSLo install-agent.sh https://raw.githubusercontent.com/mby/fenghuo/main/deploy/install-agent.sh
+less install-agent.sh
+sudo -v
+read -r -s -p 'Agent token: ' FENGHUO_TOKEN; printf '\n'
+export FENGHUO_TOKEN
+sudo --preserve-env=FENGHUO_TOKEN bash install-agent.sh --server https://probe.example.com
+unset FENGHUO_TOKEN
 ```
 
 Run it on the machine you want to monitor. It appears on the dashboard within seconds.
 
-Agent options, such as TCP latency targets:
+For TCP latency targets, add an option to the installer command before running it:
 
 ```bash
-... | sudo bash -s -- --server https://probe.example.com --token fh_... \
-  --ping "CT=ct.example.com:80,CU=cu.example.com:80,CM=cm.example.com:80"
+--ping "CT=ct.example.com:80,CU=cu.example.com:80,CM=cm.example.com:80"
 ```
+
+If your sudo policy does not permit preserving the variable, use the manual installation
+in the guide.
 
 Users in mainland China can pass `--mirror https://your-github-proxy/` to
 download release files through a GitHub proxy.
 
 ## Upgrading
 
-Follow the [backup and rollback guide](docs/installation.md#backup-upgrade-and-rollback) to stop and back up first,
-then upgrade the server, verify it, and upgrade the agents.
+Stop and back up first using the guide for [systemd](docs/installation.md#backup-upgrade-and-rollback)
+or [Docker](docs/installation.md#docker-backup-upgrade-and-rollback), then upgrade the server,
+verify it, and upgrade the agents.
 
 ```bash
 # server
@@ -182,7 +194,10 @@ The server data in `/var/lib/fenghuo` is kept until you delete it.
 | Turn off two-factor auth | `sudo -u fenghuo fenghuo-server disable-totp` |
 | Back up | [Stop and back up the database, configuration and previous binary](docs/installation.md#backup-upgrade-and-rollback) |
 
-In Docker, prefix the commands with `docker compose exec fenghuo`.
+For Docker server logs, use `docker compose logs -f fenghuo`. For account recovery,
+use `docker compose exec fenghuo /usr/local/bin/fenghuo-server reset-password` or
+`docker compose exec fenghuo /usr/local/bin/fenghuo-server disable-totp`. Agent
+commands run on each monitored host.
 
 ## UI demo data
 
@@ -201,6 +216,7 @@ Status warnings are computed from metrics; the sample public notes do not repeat
 - [Binary installation and upgrades](docs/installation.md): scripts, manual/offline setup, systemd, backups, Actions builds
 - [Configuration](docs/configuration.md): all server and agent options, reverse
   proxies, notification channels, retention
+- [Monitoring and administration](docs/monitoring.md): dashboard behavior, alerts and public visibility
 - [Security model](docs/security.md): threat model, hardening, verifying releases
 - [Contributing](CONTRIBUTING.md): development setup and release process
 - [Security policy](SECURITY.md): how to report vulnerabilities

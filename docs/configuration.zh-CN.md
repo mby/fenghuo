@@ -49,8 +49,10 @@ systemd 部署写在 `/etc/fenghuo/server.env`，Docker 部署写在容器环境
 
 ### 反向代理
 
-服务端只在两处用到真实客户端 IP：登录限流和管理列表中显示的 IP。默认信任来自回环地址的转发头，
-适用于代理与服务端在同一台机器上的情况。
+服务端使用客户端 IP 进行登录限流并记录管理信息，包括节点 IP、会话和安全审计事件。只有直接连接
+来自可信代理时，服务端才接受转发头；解析 `X-Forwarded-For` 时，从右向左跳过可信代理地址，
+使用第一个不受信任的地址；遇到无效地址时停止，若没有找到有效的非可信代理地址，则使用直接连接
+的地址。默认信任回环地址，适用于代理与服务端在同一台机器上的情况。
 
 Caddy：
 
@@ -80,8 +82,35 @@ server {
 }
 ```
 
-如果前面还有 Cloudflare，需要把 [Cloudflare 的 IP 段](https://www.cloudflare.com/ips/)也加入
-`-trusted-proxies`。Docker 中请求来自网桥网关，所以 compose 文件信任了 `172.16.0.0/12`。
+对于 **Cloudflare → nginx → 烽火服务端**，上面的 nginx 示例会用 `$remote_addr` 覆盖
+`X-Forwarded-For`。如果未配置真实 IP，此地址是 Cloudflare 边缘节点地址；只在烽火的
+`-trusted-proxies` 中添加 Cloudflare 网段无法找回访客 IP。
+
+配置 nginx 的 [real-IP 模块](https://nginx.org/en/docs/http/ngx_http_realip_module.html)，
+并保留上面的 `proxy_set_header X-Forwarded-For $remote_addr`：
+
+1. 创建 `/etc/nginx/cloudflare-real-ip.conf`，为当前每个
+   [Cloudflare IPv4 和 IPv6 网段](https://www.cloudflare.com/ips/)各写一条
+   `set_real_ip_from <CIDR>;` 指令，并及时更新列表。只信任实际连接到 nginx 的代理来源。
+2. 在 nginx 的 `http` 或对应的 `server` 块中加入：
+
+   ```nginx
+   include /etc/nginx/cloudflare-real-ip.conf;
+   real_ip_header CF-Connecting-IP;
+   ```
+
+3. 执行 `nginx -t` 检查配置，重新加载 nginx，并将节点记录的 IP 或管理会话 IP 与客户端实际公网 IP
+   比较。如果允许直接访问源站，还应验证非 Cloudflare 地址伪造 `CF-Connecting-IP` 不会改变记录的 IP。
+
+模块只接受来自已配置来源的 `CF-Connecting-IP`，nginx 再通过 `X-Forwarded-For` 发送恢复后的地址。
+保持 Cloudflare 访客 IP 请求头启用。Pseudo IPv4 的覆盖模式会把 IPv6 访客地址替换为伪 IPv4 地址；
+Worker 和其他代理链也可能影响请求头，详见 [Cloudflare 请求头文档](https://developers.cloudflare.com/fundamentals/reference/http-headers/)。
+如果源站只允许 Cloudflare 访问，应限制源站入口，并考虑通过自有证书的 Authenticated Origin Pulls
+验证请求来自自己的站点。
+
+烽火的 `-trusted-proxies` 必须包含其**直接**代理；同机 nginx 通常是回环地址。在此方案中，
+Cloudflare 网段应配置在 nginx 的 real-IP 信任列表中，在烽火中添加这些网段不能替代 nginx 配置。
+Docker compose 示例为网桥网关信任了 `172.16.0.0/12`；请检查烽火实际看到的地址，只信任必要的代理地址。
 
 ### 存储与保留
 
@@ -164,8 +193,8 @@ server {
 
 当有浏览器打开状态页或管理后台时，Agent 按 `-interval`（3 秒）上报；连续 15 秒无人查看后，降为
 `-idle-interval`（15 秒），上报次数减少约 80%。打开页面后，最多一个空闲间隔内即切回 3 秒。CPU 使用率
-和网速都是按计数器差值计算的，所以空闲时的一次上报就是这 15 秒内的平均值，流量统计不会遗漏。离线
-判定跟随 Agent 当前的间隔：连续错过三次上报即判定离线。
+和网速按计数器差值计算，因此空闲上报反映的是该采样间隔内的平均值。累计流量及其限制见下方流量统计。
+离线判定跟随 Agent 当前的间隔：连续错过三次上报即判定离线。
 
 ### 流量统计
 
@@ -176,8 +205,16 @@ server {
 `tailscale*` 等）以外的所有网卡，因为这些虚拟网卡上的流量已经计入物理网卡。如果与服务商的统计
 不一致，可以显式指定网卡，例如 `FENGHUO_NIC=eth0`。
 
-Agent 上报的是开机以来的累计值，由服务端计算差值。机器重启和服务端重启都不会丢失流量，但 Agent
-停止期间产生的流量不会被统计。
+Agent 上报所选网卡自开机以来的累计计数器。节点首次上报只建立基线，更早的流量不计入。此后在同一次
+开机期间，如果上报的两个总计数都没有减少，服务端会累加与上次成功接收的上报之间的差值。因此，
+Agent 停止或暂时无法上报期间的流量会在恢复后补入，但不会补出缺失的每分钟网速历史。
+
+如果没有重启但任一总计数减少，例如网卡被移除或所选网卡发生变化，服务端会重新建立基线，该次间隔的
+上下行均不计入。机器重启后会计入最近一次开机以来的总量，但无法恢复上次上报到重启之间的流量。
+如果上报间隔跨越计费重置点，整个差值会计入当前周期，无法按边界拆分。
+
+流量状态通常每分钟及服务端正常关闭时保存。服务端重启后从上次保存的基线继续计算；无法从该基线和
+后续计数器还原的流量不能保证在重启后保留。
 
 ### 没有 systemd 的系统
 

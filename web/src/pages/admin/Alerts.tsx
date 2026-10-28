@@ -33,10 +33,10 @@ export function Alerts() {
 
 function SectionHead({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
   return (
-    <div className="mb-3 flex items-end justify-between gap-4">
-      <div>
-        <h2 className="text-lg font-medium">{title}</h2>
-        {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
+    <div className="mb-3 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
+        <h2 className="break-words text-lg font-medium">{title}</h2>
+        {hint && <p className="break-words text-sm text-muted-foreground">{hint}</p>}
       </div>
       {action}
     </div>
@@ -85,9 +85,9 @@ function Channels() {
         <ul className="divide-y rounded-xl border bg-card">
           {list.map((c) => (
             <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 font-medium">
-                  {c.name}
+              <div className="min-w-0 w-full sm:w-auto sm:flex-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 font-medium">
+                  <span className="min-w-0 break-words">{c.name}</span>
                   <Badge variant="secondary">{c.type === "telegram" ? "Telegram" : "Webhook"}</Badge>
                   {!c.enabled && <Badge variant="outline">{t("common.disabled")}</Badge>}
                 </div>
@@ -359,9 +359,9 @@ function Rules() {
         <ul className="divide-y rounded-xl border bg-card">
           {list.map((r) => (
             <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-              <div className={cn("min-w-0", !r.enabled && "opacity-60")}>
-                <div className="font-medium">{r.name}</div>
-                <div className="text-sm text-muted-foreground">
+              <div className={cn("min-w-0 w-full sm:w-auto sm:flex-1", !r.enabled && "opacity-60")}>
+                <div className="break-words font-medium">{r.name}</div>
+                <div className="break-words text-sm text-muted-foreground">
                   {condition(r)}
                   {listSep(lang)}
                   {r.node_ids.length ? t("rule.someNodes", { n: r.node_ids.length }) : t("rule.allNodes")}
@@ -616,7 +616,7 @@ function Events() {
       ) : (
         <ul className="divide-y rounded-xl border bg-card">
           {list.map((e) => (
-            <li key={e.id} className="flex items-start gap-3 px-4 py-2.5 text-sm">
+            <li key={e.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
               <span
                 className={cn(
                   "mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs",
@@ -625,8 +625,8 @@ function Events() {
               >
                 {e.firing ? t("alerts.firing") : t("alerts.resolved")}
               </span>
-              <span className="min-w-0 flex-1">{e.message}</span>
-              <time className="shrink-0 text-xs text-muted-foreground tabular-nums">
+              <span className="order-3 w-full min-w-0 break-words sm:order-2 sm:w-auto sm:flex-1">{e.message}</span>
+              <time className="order-2 shrink-0 text-xs text-muted-foreground tabular-nums sm:order-3">
                 {dateTime(e.created_at, lang)}
               </time>
             </li>

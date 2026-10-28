@@ -57,7 +57,7 @@ export function UsageMeter({
 }) {
   const lv = level(pct);
   return (
-    <div className={cn("grid content-start gap-1 text-xs", className)}>
+    <div className={cn("grid min-w-0 content-start gap-1 text-xs", className)}>
       <div className="flex items-baseline justify-between gap-2">
         {label && <span className="text-muted-foreground">{label}</span>}
         <span className={cn("ms-auto tabular-nums", lv === "hot" && "text-ember")}>{Math.round(pct)}%</span>
@@ -65,8 +65,8 @@ export function UsageMeter({
       <Bar pct={pct} lv={lv} />
       <span
         aria-hidden={!detail}
-        title={detailLabel}
-        className="min-h-[1.5em] text-[11px] leading-relaxed tabular-nums text-muted-foreground"
+        title={detail ? (detailLabel ? `${detailLabel}: ${detail}` : detail) : undefined}
+        className="min-h-[1.5em] truncate text-[11px] leading-relaxed tabular-nums text-muted-foreground"
       >
         {detail && detailLabel && <span className="sr-only">{detailLabel}: </span>}
         {detail}

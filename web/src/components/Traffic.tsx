@@ -81,7 +81,9 @@ export function QuotaHint({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Trigger className={cn("relative z-10 cursor-help", block ? "block" : "inline-flex")}>{children}</Trigger>
+        <Trigger className={cn("relative z-10 min-w-0 cursor-help", block ? "block" : "inline-flex")}>
+          {children}
+        </Trigger>
       </TooltipTrigger>
       <TooltipContent>
         <ResetDetails traffic={traffic} />

@@ -1,4 +1,4 @@
-import { daysUntil, ratio } from "./format";
+import { daysUntil, ratio } from "./format.ts";
 import type { PublicNode } from "./types";
 
 export type Issue = "offline" | "cpu" | "mem" | "disk" | "traffic" | "expire";

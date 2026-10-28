@@ -1,5 +1,5 @@
-import { daysUntil, duration, listSep } from "./format";
-import { issues } from "./health";
+import { daysUntil, duration, listSep } from "./format.ts";
+import { issues } from "./health.ts";
 import type { Lang, MessageKey } from "./i18n";
 import type { NodeInfo, PublicNode } from "./types";
 
@@ -38,10 +38,10 @@ export function issueText(node: PublicNode, now: number, t: T, lang: Lang): stri
     .join(listSep(lang));
 }
 
-export function expiryText(node: PublicNode, now: number, t: T): string {
+export function expiryText(node: PublicNode, now: number, t: T, compact = false): string {
   if (node.expire_at <= 0) return "";
   const days = daysUntil(node.expire_at, now);
   if (days < 0) return t("node.expired");
   if (days === 0) return t("node.expiresToday");
-  return t("node.expiresIn", { n: days });
+  return t(compact ? "node.expiresInShort" : "node.expiresIn", { n: days });
 }

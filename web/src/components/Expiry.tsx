@@ -7,11 +7,23 @@ import type { PublicNode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** "Expires in 12 days", with the exact date and time on hover. */
-export function Expiry({ node, now, className }: { node: PublicNode; now: number; className?: string }) {
+export function Expiry({
+  node,
+  now,
+  className,
+  compact = false,
+}: {
+  node: PublicNode;
+  now: number;
+  className?: string;
+  compact?: boolean;
+}) {
   const { t, lang } = useI18n();
-  const text = expiryText(node, now, t);
+  const days = daysUntil(node.expire_at, now);
+  const fullText = expiryText(node, now, t);
+  const text = compact ? expiryText(node, now, t, true) : fullText;
   if (!text) return null;
-  const soon = daysUntil(node.expire_at, now) <= LIMITS.expireDays;
+  const soon = days <= LIMITS.expireDays;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -23,7 +35,14 @@ export function Expiry({ node, now, className }: { node: PublicNode; now: number
             className,
           )}
         >
-          {text}
+          {compact ? (
+            <>
+              <span className="sr-only">{fullText}</span>
+              <span aria-hidden>{text}</span>
+            </>
+          ) : (
+            text
+          )}
         </time>
       </TooltipTrigger>
       <TooltipContent>{t("expire.at", { date: fullDateTime(node.expire_at, lang) })}</TooltipContent>

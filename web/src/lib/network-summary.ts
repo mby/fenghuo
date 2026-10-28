@@ -21,6 +21,8 @@ export function networkOverview(probes: NetworkProbe[], now: number) {
       successes: p.successes as number,
     }));
   const summary = average(current);
+  const measured = visible.filter((p) => (p.samples ?? 0) > 0 && p.successes != null);
+  const worstFailure = measured.length > 0 ? Math.max(...measured.map((p) => p.failure_rate)) : null;
   if (!visible.some((p) => p.latency_fresh)) summary.latency = null;
   const end = Math.floor(now / 30) * 30;
   const history = Array.from({ length: 11 }, (_, i) => {
@@ -28,5 +30,5 @@ export function networkOverview(probes: NetworkProbe[], now: number) {
     const buckets = visible.flatMap((p) => p.history?.filter((b) => b.t === t) ?? []);
     return { t, ...average(buckets), targets: buckets.length };
   });
-  return { probes: visible, ...summary, history };
+  return { probes: visible, ...summary, worstFailure, history };
 }

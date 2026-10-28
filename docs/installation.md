@@ -9,8 +9,10 @@ in the foreground or use your own process supervisor.
 ## Choose an archive
 
 Download a published version from [GitHub Releases](https://github.com/mby/fenghuo/releases).
-Installers need published archives. If the repository has only source and no first release yet,
-build or publish it using the workflow below.
+Installers default to the latest stable Release. To install a published prerelease such as
+`v1.2.3-rc.1`, specify its exact tag with `--version` or in the download URL; prereleases are not
+the default. If there is no published Release yet, use the GitHub Actions test build and manual
+installation below.
 
 | `uname -m` | Archive architecture |
 | --- | --- |
@@ -22,51 +24,6 @@ Each release contains six archives, `fenghuo-server_linux_<arch>.tar.gz` and
 `fenghuo-agent_linux_<arch>.tar.gz`, plus `checksums.txt`. Archive names do not contain the version;
 the download URL selects it. The system needs CA root certificates. Installers require Bash,
 curl or wget, tar, sha256sum, coreutils and systemd.
-
-## Deploying from a private repository
-
-The installers download scripts and Release archives over anonymous HTTPS. They do not
-read GitHub login credentials or access tokens. The public `curl` commands below cannot
-install from a private repository; downloading the script first is insufficient because
-its archive download remains anonymous. Generated installation and probe-configuration
-commands also use public URLs, so retrieve their files yourself for a private repository.
-
-For testing, push the code to `main` to trigger **Build binaries** automatically, including
-in private repositories. Alternatively, sign in to GitHub and use Actions → **Build binaries** →
-**Run workflow** to select a branch manually. Download `fenghuo-linux-<full commit SHA>` from that
-run's Artifacts and extract the outer ZIP. Transfer the Server/Agent `.tar.gz` files for
-your target architecture plus `checksums.txt` to Linux using SCP/SFTP. Follow Method 2
-below to verify, extract and install the systemd services. Target machines need neither
-GitHub credentials nor source code or build tools.
-
-With GitHub CLI installed, download on a computer with repository read access. Replace
-`RUN_ID` and `COMMIT_SHA` with the actual run ID and full commit SHA:
-
-```bash
-gh auth login
-gh run download RUN_ID --repo mby/fenghuo \
-  --name fenghuo-linux-COMMIT_SHA --dir fenghuo-download
-```
-
-For an existing private Release, an authenticated CLI can download selected archives:
-
-```bash
-gh release download vX.Y.Z --repo mby/fenghuo \
-  --pattern 'fenghuo-*_linux_amd64.tar.gz' --pattern checksums.txt --dir fenghuo-download
-```
-
-Replace `amd64` with the target architecture. Downloads from Releases in a signed-in
-browser work too; use the same manual installation steps afterward. Never put a GitHub
-token into the agent's `FENGHUO_TOKEN`, which accepts only this system's node token.
-Download and transfer the local probe configuration script from source, then run
-`sudo bash configure-probes.sh ...` on the target machine when needed.
-
-Formal releases skip GitHub attestations by default in private repositories, retaining
-build checks, archive checksums and publication. With GitHub Enterprise Cloud support
-for private attestations, set the repository Actions variable
-`ENABLE_PRIVATE_ATTESTATIONS=true` to opt in. Public repositories still attest by default.
-See [GitHub attestation availability](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations)
-and [artifact download permissions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts).
 
 ## Option 1: installer scripts (recommended)
 
@@ -135,9 +92,12 @@ sha256sum --check --ignore-missing checksums.txt
 
 Skip the other archive if you only need one program. Stop on a failed checksum. For an offline
 machine, copy archives and `checksums.txt` from the same release through SCP or removable media
-from a trusted computer, then verify again on the target. Checksums detect damaged files; to verify
-build provenance on an online computer, use `gh attestation verify <archive> --repo mby/fenghuo`.
-Provenance verification applies to formal release archives.
+from a trusted computer. On each target, change to the directory containing those files, set `ARCH`
+for that machine (for example, `ARCH=amd64`), and run `sha256sum --check --ignore-missing checksums.txt`
+again before extracting. Checksums detect damaged files. To verify build provenance on an online computer, use `gh attestation verify <archive> --repo mby/fenghuo`
+and `gh attestation verify checksums.txt --repo mby/fenghuo` before transferring the files.
+The public Release workflow attests both the archives and `checksums.txt`, including for
+prereleases; test-build artifacts do not have these attestations.
 
 ### Server with systemd
 
@@ -244,40 +204,292 @@ customize the data directory, use that actual path in backup and restore command
 
 ## Backup, upgrade and rollback
 
-Order: **stop and back up → upgrade Server → verify login and nodes → upgrade Agent**. Database
-migrations run at startup. This backup command is for the default systemd installation above. It
-captures the database, configuration, previous server and unit. Backups can contain tokens and sessions;
-keep them root-only and copy another instance to a trusted location.
+Upgrade in this order: **stop and back up Server → upgrade Server → verify login and nodes →
+back up and upgrade each Agent**. Database migrations run at startup. The commands below assume
+the default systemd paths shown above; include any custom data paths and configuration separately.
+Backups can contain tokens and sessions: keep them root-only and copy another copy to a trusted
+location. Test restoring backups on an isolated machine before relying on them.
+
+### Stop and back up Server
+
+On the Server host, stop the service and back up its data, configuration, binary, unit and optional
+unit drop-ins. The service remains stopped after the backup; if the backup fails, resolve the problem
+before proceeding.
 
 ```bash
 sudo bash <<'EOF'
 set -euo pipefail
 umask 077
 install -d -m 0700 /var/backups/fenghuo
-backup_dir=$(mktemp -d /var/backups/fenghuo/snapshot.XXXXXX)
+backup_dir=$(mktemp -d /var/backups/fenghuo/server.XXXXXX)
 systemctl stop fenghuo-server
-trap 'systemctl start fenghuo-server' EXIT
-tar -czf "$backup_dir/backup.tar.gz" -C / var/lib/fenghuo etc/fenghuo \
-  usr/local/bin/fenghuo-server etc/systemd/system/fenghuo-server.service
+paths=(var/lib/fenghuo etc/fenghuo usr/local/bin/fenghuo-server
+       etc/systemd/system/fenghuo-server.service)
+if [ -d /etc/systemd/system/fenghuo-server.service.d ]; then
+  paths+=(etc/systemd/system/fenghuo-server.service.d)
+fi
+tar -czf "$backup_dir/backup.tar.gz" -C / "${paths[@]}"
+tar -tzf "$backup_dir/backup.tar.gz" >/dev/null
 printf 'Backup: %s/backup.tar.gz\n' "$backup_dir"
 EOF
 ```
 
-Then run the reviewed installers, replacing `vX.Y.Z` with your target release:
+### Upgrade Server online
+
+With network access, run the reviewed installer and replace `vX.Y.Z` with the desired published tag.
+It verifies the download, preserves the existing configuration and data, replaces the binary and unit,
+and starts the service.
 
 ```bash
 sudo bash install-server.sh --version vX.Y.Z
+```
+
+### Upgrade Server from downloaded files
+
+For an offline Release or an Actions test build, copy the appropriate archive and its matching
+`checksums.txt` to `~/fenghuo-download` on the Server host. After the stop and backup above, change
+`ARCH` below to that host's architecture. The command checks the exact archive listed in the manifest
+before replacing the stopped binary and unit. It does not download anything or modify `server.env`.
+If you customized the unit itself, reconcile your changes with the packaged unit before replacing it;
+the example preserves systemd drop-ins.
+
+```bash
+bash <<'EOF'
+set -euo pipefail
+ARCH=amd64
+cd "$HOME/fenghuo-download"
+archive="fenghuo-server_linux_${ARCH}.tar.gz"
+test -f "$archive"
+awk -v file="$archive" '$2 == file {print}' checksums.txt | sha256sum --check -
+if sudo systemctl is-active --quiet fenghuo-server; then
+  echo 'Stop and back up fenghuo-server first.' >&2
+  exit 1
+fi
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+tar -xzf "$archive" -C "$work" fenghuo-server fenghuo-server.service
+sudo install -m 0755 -o root -g root "$work/fenghuo-server" /usr/local/bin/fenghuo-server
+sudo install -m 0644 -o root -g root "$work/fenghuo-server.service" /etc/systemd/system/fenghuo-server.service
+sudo systemctl daemon-reload
+sudo systemctl start fenghuo-server
+sudo systemctl is-active --quiet fenghuo-server
+EOF
+```
+
+Check `sudo systemctl status fenghuo-server --no-pager` and the dashboard. Verify admin login and node
+reports before upgrading Agents. If startup fails, preserve the logs and investigate; upgrades do not
+automatically roll back.
+
+### Back up and upgrade each Agent
+
+On each Agent host, stop it and save its configuration, binary, unit and optional drop-ins. The
+configuration backup includes local probe overrides. The service stays stopped until upgraded.
+
+```bash
+sudo bash <<'EOF'
+set -euo pipefail
+umask 077
+install -d -m 0700 /var/backups/fenghuo
+backup_dir=$(mktemp -d /var/backups/fenghuo/agent.XXXXXX)
+systemctl stop fenghuo-agent
+paths=(etc/fenghuo usr/local/bin/fenghuo-agent
+       etc/systemd/system/fenghuo-agent.service)
+if [ -d /etc/systemd/system/fenghuo-agent.service.d ]; then
+  paths+=(etc/systemd/system/fenghuo-agent.service.d)
+fi
+tar -czf "$backup_dir/backup.tar.gz" -C / "${paths[@]}"
+tar -tzf "$backup_dir/backup.tar.gz" >/dev/null
+printf 'Backup: %s/backup.tar.gz\n' "$backup_dir"
+EOF
+```
+
+With network access, use the reviewed installer; `--update` preserves local configuration:
+
+```bash
 sudo bash install-agent.sh --update --version vX.Y.Z
 ```
 
-Server preserves configuration and data; agent `--update` preserves local configuration. Installers
-stage the executable beside its destination and rename it atomically, then restart the service.
-They do not automatically roll back: if startup fails, retain logs, stop the service and investigate.
+For an offline Release or downloaded test build, copy the matching Agent archive and `checksums.txt`
+to `~/fenghuo-download` on that Agent host. Set `ARCH` for the host and run the following after the
+backup. It verifies the selected archive before replacing the stopped binary and unit; `agent.env`
+and probe overrides are preserved. Reconcile any custom changes to the unit itself first.
 
-Do not downgrade just the binary while keeping a migrated database. Stop Server, preserve the current
-data separately, then restore the **database, configuration, old binary and unit from the same pre-upgrade
-backup**, preserving ownership and permissions. Run `systemctl daemon-reload`, start and verify.
-Test extraction and database recovery in an isolated directory or test machine first.
+```bash
+bash <<'EOF'
+set -euo pipefail
+ARCH=amd64
+cd "$HOME/fenghuo-download"
+archive="fenghuo-agent_linux_${ARCH}.tar.gz"
+test -f "$archive"
+awk -v file="$archive" '$2 == file {print}' checksums.txt | sha256sum --check -
+if sudo systemctl is-active --quiet fenghuo-agent; then
+  echo 'Stop and back up fenghuo-agent first.' >&2
+  exit 1
+fi
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+tar -xzf "$archive" -C "$work" fenghuo-agent fenghuo-agent.service
+sudo install -m 0755 -o root -g root "$work/fenghuo-agent" /usr/local/bin/fenghuo-agent
+sudo install -m 0644 -o root -g root "$work/fenghuo-agent.service" /etc/systemd/system/fenghuo-agent.service
+sudo systemctl daemon-reload
+sudo systemctl start fenghuo-agent
+sudo systemctl is-active --quiet fenghuo-agent
+EOF
+```
+
+Check `sudo systemctl status fenghuo-agent --no-pager` and confirm that the node resumes reporting.
+
+### Server rollback
+
+Do not downgrade only the binary while keeping a migrated database. First stop and preserve the
+current database, configuration, binary and unit in a separate backup. Restore the **database,
+configuration, old binary and unit from the same pre-upgrade backup**, preserving ownership and
+permissions; avoid merging the old database with newer files. Then run `systemctl daemon-reload`,
+start the service and verify login and nodes. Restore Agent backups separately on their hosts if needed.
+
+## Docker backup, upgrade and rollback
+
+These steps apply to the supplied `deploy/docker-compose.yml` on a Linux host with a local, rootful Docker
+daemon. Its `fenghuo` service uses the `fenghuo-data` named volume at `/data`; Compose normally adds
+the project name to the actual volume name. Run the commands from the directory containing that
+Compose file, using the same project and Compose options as the existing deployment. Stop any other
+writers to the volume as well.
+
+The server image is distroless. Prepare the separate `ubuntu:24.04` helper image on the Docker host
+before stopping, for example with `docker pull ubuntu:24.04` while online or by transferring it with
+`docker save`/`docker load`. The commands use temporary helper containers with networking disabled;
+they do not require a shell or tar in the Fenghuo image.
+
+### Stop and back up the Docker service
+
+The command identifies the existing container, actual local volume and immutable image ID, then stops
+the service. It saves the volume, resolved Compose configuration, image reference, image ID, binary
+version and image itself. The output names a new root-only backup directory; save that path and copy
+the backup to a trusted location. The service stays stopped. A missing helper image, non-named volume,
+or non-local volume driver stops the procedure; adapt the backup for other storage drivers.
+
+```bash
+sudo bash <<'EOF'
+set -euo pipefail
+umask 077
+helper=ubuntu:24.04
+docker image inspect "$helper" >/dev/null
+container=$(docker compose ps --all --quiet fenghuo)
+test -n "$container"
+project=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$container")
+volume=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}' "$container")
+image_ref=$(docker inspect --format '{{.Config.Image}}' "$container")
+image_id=$(docker inspect --format '{{.Image}}' "$container")
+test -n "$project" && test -n "$volume" && test -n "$image_id"
+test "$(docker volume inspect --format '{{.Driver}}' "$volume")" = local
+docker compose stop fenghuo
+install -d -m 0700 /var/backups/fenghuo
+backup_dir=$(mktemp -d /var/backups/fenghuo/docker.XXXXXX)
+printf '%s\n' "$project" > "$backup_dir/project.txt"
+printf '%s\n' "$volume" > "$backup_dir/volume.txt"
+printf '%s\n' "$image_ref" > "$backup_dir/image-ref.txt"
+printf '%s\n' "$image_id" > "$backup_dir/image-id.txt"
+docker compose config > "$backup_dir/compose.yaml"
+docker image save -o "$backup_dir/image.tar" "$image_id"
+docker run --rm --pull=never --network none "$image_id" version > "$backup_dir/version.txt"
+docker run --rm --pull=never --network none --user 0:0 \
+  --mount "type=volume,src=$volume,dst=/data,readonly" \
+  --mount "type=bind,src=$backup_dir,dst=/backup" \
+  "$helper" tar --numeric-owner -C /data -czf /backup/data.tar.gz .
+docker run --rm --pull=never --network none \
+  --mount "type=bind,src=$backup_dir,dst=/backup,readonly" \
+  "$helper" tar -tzf /backup/data.tar.gz >/dev/null
+(
+  cd "$backup_dir"
+  sha256sum data.tar.gz image.tar compose.yaml image-id.txt image-ref.txt \
+    version.txt project.txt volume.txt > SHA256SUMS
+  sha256sum -c SHA256SUMS
+)
+printf 'Backup: %s\n' "$backup_dir"
+EOF
+```
+
+### Upgrade the Docker service
+
+After the backup, use the intended published `ghcr.io/mby/fenghuo` image tag in the Compose file.
+With network access, pull it and start the service:
+
+```bash
+docker compose pull fenghuo
+docker compose up -d --no-deps --pull never fenghuo
+docker compose ps fenghuo
+docker compose logs --tail 100 fenghuo
+```
+
+For an offline upgrade, transfer and `docker load` the intended image first, ensure its tag matches
+the Compose file, skip `docker compose pull` and use the remaining commands. Check the logs, login and
+node reports. The pre-upgrade volume backup and image belong together if a database migration occurs.
+
+### Roll back the Docker service
+
+**Before restoring, preserve the current state:** repeat the Docker backup procedure above into a
+new directory, even if the upgraded container has stopped. It stops the service and saves the current
+volume, configuration and image. Keep that new backup separately; for the command below, set
+`backup_dir` to the **earlier pre-upgrade** backup.
+
+The command verifies that backup, restores it to a new named volume with the helper container,
+loads the matching old image, and starts the saved Compose configuration with an override. It leaves
+the original volume intact and avoids mixing restored files with newer database files.
+
+```bash
+sudo bash <<'EOF'
+set -euo pipefail
+backup_dir=/var/backups/fenghuo/docker.REPLACE
+helper=ubuntu:24.04
+docker image inspect "$helper" >/dev/null
+(
+  cd "$backup_dir"
+  sha256sum -c SHA256SUMS
+)
+project=$(cat "$backup_dir/project.txt")
+old_image=$(cat "$backup_dir/image-id.txt")
+[[ "$project" =~ ^[a-z0-9][a-z0-9_-]*$ ]]
+[[ "$old_image" =~ ^sha256:[0-9a-f]{64}$ ]]
+if [ -n "$(docker ps --quiet --filter "label=com.docker.compose.project=$project" \
+    --filter "label=com.docker.compose.service=fenghuo")" ]; then
+  echo 'Stop and back up the current Docker service first.' >&2
+  exit 1
+fi
+restore_volume="fenghuo-restore-$(date +%s)-$$"
+if docker volume inspect "$restore_volume" >/dev/null 2>&1; then
+  echo 'Restore volume already exists.' >&2
+  exit 1
+fi
+docker volume create "$restore_volume" >/dev/null
+docker run --rm --pull=never --network none --user 0:0 \
+  --mount "type=volume,src=$restore_volume,dst=/data" \
+  --mount "type=bind,src=$backup_dir,dst=/backup,readonly" \
+  "$helper" tar --numeric-owner --same-permissions -C /data -xzf /backup/data.tar.gz
+docker image load -i "$backup_dir/image.tar"
+rollback_tag="ghcr.io/mby/fenghuo:rollback-${old_image#sha256:}"
+docker image tag "$old_image" "$rollback_tag"
+cat > "$backup_dir/rollback.override.yaml" <<YAML
+services:
+  fenghuo:
+    image: $rollback_tag
+volumes:
+  fenghuo-data:
+    external: true
+    name: $restore_volume
+YAML
+docker compose -p "$project" -f "$backup_dir/compose.yaml" \
+  -f "$backup_dir/rollback.override.yaml" up -d --no-deps --pull never fenghuo
+docker compose -p "$project" -f "$backup_dir/compose.yaml" \
+  -f "$backup_dir/rollback.override.yaml" ps fenghuo
+printf 'Restored volume: %s\nProject: %s\nCompose files: %s/compose.yaml and %s/rollback.override.yaml\n' \
+  "$restore_volume" "$project" "$backup_dir" "$backup_dir"
+EOF
+```
+
+After verifying the restored login and nodes, continue using the printed Compose files and project
+name, or update your normal Compose configuration to use the restored volume and old image. Running
+the unmodified newer Compose file could switch back to the newer volume or image. Keep both backups
+and volumes until recovery is verified.
 
 ## Uninstall
 
@@ -292,23 +504,52 @@ or manually stop/disable the unit and remove the program/unit. Delete data and b
 
 ## Generate archives with GitHub Actions
 
-After committing and pushing the changes to GitHub:
+These workflows run in the public `mby/fenghuo` repository:
 
-1. **Test builds:** pushing to `main` automatically triggers **Build binaries**. Once the default
-   branch contains the workflow, Actions → **Build binaries** → **Run workflow** can also select
-   a branch manually. Download `fenghuo-linux-<full commit SHA>` from the run's
-   Artifacts. Retention is 14 days, and downloading requires GitHub login. Extract the outer ZIP to get
-   six tar.gz files and checksums. Binary versions contain `SNAPSHOT`; use the manual installation steps for testing.
-2. **Formal releases:** check CI, then tag committed code and push the tag, for example `git tag v1.2.3`
-   and `git push origin v1.2.3` (choose your actual version). **Release** runs full checks, builds and
-   verifies all six archives, starts amd64 binaries to check the embedded UI and separate listeners,
-   and generates provenance before creating the Release for public repositories or opted-in private
-   repositories. Tags with a hyphen are prereleases and do
-   not become the stable installer entry point.
-3. The existing Docker image job runs after successful binary publication. Binary installation does
-   not require waiting for or using that image. The test-build workflow does not publish images.
+1. **Test builds:** pushing to `main` triggers **Build binaries**. Once the default branch contains
+   the workflow, Actions → **Build binaries** → **Run workflow** can also select a branch.
+   The workflow runs checks, builds a GoReleaser snapshot, verifies all six archives and smoke-tests
+   the amd64 binaries. Sign in to GitHub and download `fenghuo-linux-<full commit SHA>` from the
+   run's Artifacts within 14 days. Extract the outer ZIP to obtain the six tar.gz files and
+   `checksums.txt`. These are test artifacts, not a Release; verify and install them using the
+   manual steps above, skipping the Release download commands.
+2. **Published releases:** pushing a tag matching `v*` triggers **Release**. For example, after
+   checking CI, tag committed code with `git tag v1.2.3` and push it with
+   `git push origin v1.2.3`, choosing the actual version. The workflow runs `make check` and
+   ShellCheck, builds and verifies all six archives, checks the amd64 binary versions and starts
+   the server to check its embedded UI and separate listeners. It attests the archives and
+   `checksums.txt` before publishing the Release. Any tag containing a hyphen is marked as a
+   prerelease and is not the default stable installer entry point.
+3. **Container image:** after the binary job succeeds, Release builds and publishes the Docker
+   image. Binary installation does not require waiting for or using that image. The test-build
+   workflow does not publish images.
 
-Test builds do not create a Release, deploy anything or update agents. Prefer stable Releases for
-production. If only the image job fails, choose **Re-run failed jobs**. A full rerun reuses an existing
-published Release only if its archives match the current checksums; different contents or an existing
-draft stop the workflow instead of overwriting published versions.
+To download a test artifact with GitHub CLI, sign in and replace `RUN_ID` and `COMMIT_SHA`
+with the run ID and full commit SHA:
+
+```bash
+gh run download RUN_ID --repo mby/fenghuo \
+  --name fenghuo-linux-COMMIT_SHA --dir fenghuo-download
+```
+
+### Install a downloaded test build
+
+Extract the downloaded Actions Artifact ZIP on a trusted computer, then copy the required archive
+and its matching `checksums.txt` to the target. On the target, change to that directory, set `ARCH`
+for the machine and verify the copied files. No Release download or installer script is used here.
+
+```bash
+cd /path/to/fenghuo-download
+ARCH=amd64
+sha256sum --check --ignore-missing checksums.txt
+```
+
+Stop if verification fails. For a new installation, continue with the relevant manual Server or Agent
+steps above. For an existing service, first stop and back it up, then use the offline upgrade steps
+above; those commands check the exact archive again before replacement. Test builds do not create a
+Release, deploy anything or update agents. Prefer stable Releases for production.
+
+If only the image job fails, choose **Re-run failed jobs**. A full rerun retains an existing
+published Release only after its checksum file matches the new build and all six downloaded
+archives pass verification. A mismatch or an existing draft stops publication instead of
+overwriting published assets.
