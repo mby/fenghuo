@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/mby/fenghuo/internal/server/store"
 )
 
 func (s *Server) handleAvailability(w http.ResponseWriter, r *http.Request, admin bool) {
@@ -25,7 +27,13 @@ func (s *Server) handleAvailability(w http.ResponseWriter, r *http.Request, admi
 		rng = values[0]
 	}
 	now := time.Now()
-	summary, queryErr := s.Store.QueryAvailability(r.Context(), v.Node.ID, now.Add(-ranges[rng]).Unix(), now.Unix())
+	var live *store.AvailabilityInterval
+	if s.Availability != nil {
+		if tail, ok := s.Availability.Tail(v, now); ok {
+			live = &tail
+		}
+	}
+	summary, queryErr := s.Store.QueryAvailability(r.Context(), v.Node.ID, now.Add(-ranges[rng]).Unix(), now.Unix(), live)
 	if queryErr != nil {
 		s.Log.Error("query availability", "err", queryErr)
 		writeError(w, http.StatusInternalServerError, "internal_error")

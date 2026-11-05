@@ -4,6 +4,7 @@ package availability
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/mby/fenghuo/internal/server/hub"
@@ -27,11 +28,43 @@ type Runner struct {
 	Hub      *hub.Hub
 	Store    *store.Store
 	Log      *slog.Logger
+	mu       sync.Mutex
 	previous map[int64]observation
 }
 
+func (o observation) continues(uuid, state string, now time.Time) bool {
+	gap := now.Sub(o.at)
+	return o.uuid == uuid && state != "unknown" && o.state == state && gap > 0 && gap <= MaxObservationGap && now.Unix() > o.at.Unix()
+}
+
+func stateOf(v hub.View) string {
+	// No report in this process means no observation, including the hub's
+	// synthetic online restart grace. Never infer history from node_info.
+	if v.LastSeen.IsZero() || v.Status == nil {
+		return "unknown"
+	}
+	if v.Online {
+		return "online"
+	}
+	return "offline"
+}
+
+// Tail is the not yet persisted span that an observation at now would save.
+func (r *Runner) Tail(v hub.View, now time.Time) (store.AvailabilityInterval, bool) {
+	r.mu.Lock()
+	prev, ok := r.previous[v.Node.ID]
+	r.mu.Unlock()
+	state := stateOf(v)
+	if !ok || !prev.continues(v.Node.UUID, state, now) {
+		return store.AvailabilityInterval{}, false
+	}
+	return store.AvailabilityInterval{Start: prev.at.Unix(), End: now.Unix(), State: state}, true
+}
+
 func (r *Runner) Run(ctx context.Context) {
+	r.mu.Lock()
 	r.previous = nil
+	r.mu.Unlock()
 	r.observe(ctx, time.Now())
 	ticker := time.NewTicker(ObservationInterval)
 	defer ticker.Stop()
@@ -68,21 +101,14 @@ func (r *Runner) observe(ctx context.Context, now time.Time) {
 }
 
 func (r *Runner) intervals(now time.Time, views []hub.View) []store.AvailabilityRow {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	next := make(map[int64]observation, len(views))
 	batch := make([]store.AvailabilityRow, 0, len(views))
 	for _, v := range views {
-		state := "unknown"
-		// No report in this process means no observation, including the hub's
-		// synthetic online restart grace. Never infer history from node_info.
-		if !v.LastSeen.IsZero() && v.Status != nil {
-			state = "offline"
-			if v.Online {
-				state = "online"
-			}
-		}
+		state := stateOf(v)
 		prev, ok := r.previous[v.Node.ID]
-		gap := now.Sub(prev.at)
-		if ok && prev.uuid == v.Node.UUID && state != "unknown" && prev.state == state && gap > 0 && gap <= MaxObservationGap && now.Unix() > prev.at.Unix() {
+		if ok && prev.continues(v.Node.UUID, state, now) {
 			batch = append(batch, store.AvailabilityRow{NodeID: v.Node.ID, UUID: v.Node.UUID, AvailabilityInterval: store.AvailabilityInterval{Start: prev.at.Unix(), End: now.Unix(), State: state}})
 		}
 		next[v.Node.ID] = observation{at: now, uuid: v.Node.UUID, state: state}

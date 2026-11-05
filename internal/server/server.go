@@ -65,9 +65,10 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return err
 	}
 	roll := &rollup.Runner{Hub: h, Store: st, KeepMinute: cfg.KeepMinute, KeepHour: cfg.KeepHour, Log: log}
+	availabilityRunner := &availability.Runner{Hub: h, Store: st, Log: log}
 
 	srv := api.New(api.Deps{
-		Store: st, Hub: h, Alerts: alerts, Notify: notifier, Web: webui.Handler(),
+		Store: st, Hub: h, Alerts: alerts, Notify: notifier, Availability: availabilityRunner, Web: webui.Handler(),
 		Trusted: cfg.TrustedProxies, KeepMinute: cfg.KeepMinute, KeepHour: cfg.KeepHour, DataDir: cfg.DataDir, Log: log,
 	})
 
@@ -109,7 +110,6 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 			log.Error("audit worker", "err", err)
 		}
 	})
-	availabilityRunner := &availability.Runner{Hub: h, Store: st, Log: log}
 	wg.Go(func() { availabilityRunner.Run(runCtx) })
 
 	errc := make(chan error, len(servers))

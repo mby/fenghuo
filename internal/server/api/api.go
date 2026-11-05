@@ -16,22 +16,25 @@ import (
 
 	"github.com/mby/fenghuo/internal/server/alert"
 	"github.com/mby/fenghuo/internal/server/auth"
+	"github.com/mby/fenghuo/internal/server/availability"
 	"github.com/mby/fenghuo/internal/server/hub"
 	"github.com/mby/fenghuo/internal/server/notify"
 	"github.com/mby/fenghuo/internal/server/store"
 )
 
 type Deps struct {
-	Store      *store.Store
-	Hub        *hub.Hub
-	Alerts     *alert.Engine
-	Notify     *notify.Notifier
-	Web        http.Handler
-	Trusted    []netip.Prefix
-	KeepMinute time.Duration
-	KeepHour   time.Duration
-	DataDir    string
-	Log        *slog.Logger
+	Store  *store.Store
+	Hub    *hub.Hub
+	Alerts *alert.Engine
+	Notify *notify.Notifier
+	// Availability is optional; without it the latest incomplete interval is unknown.
+	Availability *availability.Runner
+	Web          http.Handler
+	Trusted      []netip.Prefix
+	KeepMinute   time.Duration
+	KeepHour     time.Duration
+	DataDir      string
+	Log          *slog.Logger
 }
 
 type Server struct {

@@ -104,7 +104,8 @@ func (s *Store) CleanupAvailability(ctx context.Context, now time.Time) error {
 // QueryAvailability streams the full range for totals, retaining only the most
 // recent 100 timeline spans. Outages are observed offline runs intersecting the
 // window, clipped to it; unknown gaps split runs and do not imply recovery.
-func (s *Store) QueryAvailability(ctx context.Context, nodeID, from, to int64) (AvailabilitySummary, error) {
+// live is the observer's unpersisted tail; it is ignored if it overlaps rows.
+func (s *Store) QueryAvailability(ctx context.Context, nodeID, from, to int64, live *AvailabilityInterval) (AvailabilitySummary, error) {
 	out := AvailabilitySummary{From: from, To: to, Timeline: []AvailabilityInterval{}}
 	if to <= from || to-from > int64((90*24*time.Hour)/time.Second) {
 		return out, fmt.Errorf("invalid availability window")
@@ -132,11 +133,7 @@ func (s *Store) QueryAvailability(ctx context.Context, nodeID, from, to int64) (
 		out.Timeline = append(out.Timeline, span)
 	}
 	pos, offlineEnd, offlineRun := from, int64(-1), int64(0)
-	for rows.Next() {
-		var span AvailabilityInterval
-		if err := rows.Scan(&span.Start, &span.End, &span.State); err != nil {
-			return out, fmt.Errorf("scan availability: %w", err)
-		}
+	add := func(span AvailabilityInterval) {
 		span.Start, span.End = max(span.Start, from), min(span.End, to)
 		appendSpan(AvailabilityInterval{Start: pos, End: span.Start, State: "unknown"})
 		d := span.End - span.Start
@@ -155,8 +152,18 @@ func (s *Store) QueryAvailability(ctx context.Context, nodeID, from, to int64) (
 		appendSpan(span)
 		pos = span.End
 	}
+	for rows.Next() {
+		var span AvailabilityInterval
+		if err := rows.Scan(&span.Start, &span.End, &span.State); err != nil {
+			return out, fmt.Errorf("scan availability: %w", err)
+		}
+		add(span)
+	}
 	if err := rows.Err(); err != nil {
 		return out, fmt.Errorf("read availability: %w", err)
+	}
+	if live != nil && pos <= live.Start && live.Start < live.End && live.End <= to {
+		add(*live)
 	}
 	appendSpan(AvailabilityInterval{Start: pos, End: to, State: "unknown"})
 	known := out.OnlineSeconds + out.OfflineSeconds

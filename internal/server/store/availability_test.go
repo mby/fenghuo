@@ -34,7 +34,7 @@ func TestAvailabilitySummary(t *testing.T) {
 		{"empty", 600, 660, 0, 0, 60, 0, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := s.QueryAvailability(ctx, n.ID, tc.from, tc.to)
+			got, err := s.QueryAvailability(ctx, n.ID, tc.from, tc.to, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -105,7 +105,7 @@ func TestAvailabilityTimelineBoundAndValidation(t *testing.T) {
 	if err := s.SaveAvailability(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.QueryAvailability(ctx, n.ID, 0, 14400)
+	got, err := s.QueryAvailability(ctx, n.ID, 0, 14400, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestAvailabilityTimelineBoundAndValidation(t *testing.T) {
 		t.Fatal("unbounded batch accepted")
 	}
 	for _, window := range [][2]int64{{1, 1}, {2, 1}, {0, 91 * 86400}} {
-		if _, err := s.QueryAvailability(ctx, n.ID, window[0], window[1]); err == nil {
+		if _, err := s.QueryAvailability(ctx, n.ID, window[0], window[1], nil); err == nil {
 			t.Fatal("invalid window accepted")
 		}
 	}
@@ -141,11 +141,42 @@ func TestAvailabilityBatchRollbackAndNodeIdentity(t *testing.T) {
 	if err := s.SaveAvailability(ctx, []AvailabilityRow{adjacent}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.QueryAvailability(ctx, n.ID, 100, 240)
+	got, err := s.QueryAvailability(ctx, n.ID, 100, 240, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.OnlineSeconds != 60 || got.UnknownSeconds != 80 {
 		t.Fatalf("rollback or UUID guard failed: %+v", got)
+	}
+}
+
+func TestAvailabilityLiveTail(t *testing.T) {
+	s := openTest(t)
+	n := availabilityNode(t, s)
+	ctx := context.Background()
+	if err := s.SaveAvailability(ctx, []AvailabilityRow{{NodeID: n.ID, UUID: n.UUID, AvailabilityInterval: AvailabilityInterval{Start: 100, End: 160, State: "online"}}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name            string
+		live            *AvailabilityInterval
+		online, unknown int64
+		timeline        int
+	}{
+		{"none", nil, 60, 15, 2},
+		{"adjacent merges", &AvailabilityInterval{Start: 160, End: 175, State: "online"}, 75, 0, 1},
+		{"offline after gap", &AvailabilityInterval{Start: 165, End: 175, State: "offline"}, 60, 5, 3},
+		{"overlap ignored", &AvailabilityInterval{Start: 150, End: 175, State: "online"}, 60, 15, 2},
+		{"beyond window ignored", &AvailabilityInterval{Start: 160, End: 180, State: "online"}, 60, 15, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := s.QueryAvailability(ctx, n.ID, 100, 175, tc.live)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.OnlineSeconds != tc.online || got.UnknownSeconds != tc.unknown || len(got.Timeline) != tc.timeline {
+				t.Fatalf("summary: %+v", got)
+			}
+		})
 	}
 }

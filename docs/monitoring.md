@@ -88,7 +88,9 @@ time / the entire selected range. No known time produces no uptime percentage.
 
 Startup, never-reported nodes, transitions, server downtime, delayed observation
 and failed persistence leave explicit unknown gaps. The latest incomplete interval
-is unknown too. Short outages between observations may be missed. This is an
+counts as known only when the current state matches the last observation under the
+same rules, and is not saved until the next observation. Short outages between
+observations may be missed. This is an
 estimate from the panel's perspective, not proof that a service was reachable.
 Outage counts are observed offline runs; an unknown gap splits a run and does not
 prove a recovery. Timeline results show the latest 100 intervals, while summary

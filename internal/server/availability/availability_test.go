@@ -84,12 +84,49 @@ func TestRestartGapPersistsAsUnknown(t *testing.T) {
 		}
 	}
 	defer s.Close()
-	got, err := s.QueryAvailability(ctx, n.ID, base.Unix(), base.Unix()+420)
+	got, err := s.QueryAvailability(ctx, n.ID, base.Unix(), base.Unix()+420, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.OnlineSeconds != 120 || got.UnknownSeconds != 300 || got.OfflineSeconds != 0 {
 		t.Fatalf("summary: %+v", got)
+	}
+}
+
+func TestTail(t *testing.T) {
+	base := time.Unix(1000, 0)
+	view := hub.View{Node: store.Node{ID: 1, UUID: "a"}, Online: true, LastSeen: base, Status: &proto.Report{}}
+	r := &Runner{}
+	if _, ok := r.Tail(view, base); ok {
+		t.Fatal("tail before any observation")
+	}
+	r.intervals(base, []hub.View{view})
+	offline := view
+	offline.Online = false
+	renamed := view
+	renamed.Node.UUID = "b"
+	for _, tc := range []struct {
+		name    string
+		view    hub.View
+		seconds int
+		ok      bool
+	}{
+		{"same state", view, 11, true},
+		{"same second", view, 0, false},
+		{"state changed", offline, 11, false},
+		{"identity changed", renamed, 11, false},
+		{"stale observation", view, 91, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := base.Add(time.Duration(tc.seconds) * time.Second)
+			got, ok := r.Tail(tc.view, now)
+			if ok != tc.ok {
+				t.Fatalf("ok = %v; want %v", ok, tc.ok)
+			}
+			if ok && got != (store.AvailabilityInterval{Start: base.Unix(), End: now.Unix(), State: "online"}) {
+				t.Fatalf("tail %+v", got)
+			}
+		})
 	}
 }
 
