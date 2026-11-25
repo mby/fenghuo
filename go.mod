@@ -1,6 +1,6 @@
 module github.com/mby/fenghuo
 
-go 1.27.3
+go 1.27.4
 
 require (
 	golang.org/x/crypto v0.57.0

@@ -19,7 +19,7 @@ To contribute, fork the repository, create a branch, and open a pull request aga
 
 ### Development setup
 
-Requirements: Go 1.27.3+, Node.js 24+, pnpm 11, Python 3.11+ and Bash. Python checks use only the standard library.
+Requirements: Go 1.27.4+, Node.js 24+, pnpm 11, Python 3.11+ and Bash. Python checks use only the standard library.
 
 ```bash
 pnpm --dir web install
@@ -92,7 +92,7 @@ Upgrade the server before agents: the server rejects report fields it does not k
 
 ### 开发环境
 
-需要 Go 1.27.3+、Node.js 24+、pnpm 11、Python 3.11+ 和 Bash。Python 检查仅使用标准库。
+需要 Go 1.27.4+、Node.js 24+、pnpm 11、Python 3.11+ 和 Bash。Python 检查仅使用标准库。
 
 ```bash
 pnpm --dir web install
