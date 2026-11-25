@@ -60,7 +60,7 @@ type pingAcc struct {
 }
 
 func (a *pingAcc) row(nodeID int64, name string) store.PingRow {
-	r := store.PingRow{NodeID: nodeID, Target: name, TS: a.minute, AvgMS: -1}
+	r := store.PingRow{NodeID: nodeID, Target: name, TS: a.minute, AvgMS: -1, Samples: a.total, Successes: a.ok, SumMS: a.sum}
 	if a.ok > 0 {
 		r.AvgMS = round2(a.sum / float64(a.ok))
 	}

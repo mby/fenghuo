@@ -26,10 +26,18 @@ type Config struct {
 	NICs         []string
 	Ping         []Target
 	PingInterval time.Duration
+	ICMP         []Target
+	ICMPInterval time.Duration
 	AllowHTTP    bool
 }
 
 func (c Config) Validate() error {
+	if len(c.Ping)+len(c.ICMP) > proto.MaxPingTargets {
+		return errors.New("at most 16 combined probe targets")
+	}
+	if len(c.ICMP) > 0 && (c.ICMPInterval < time.Second || c.ICMPInterval > time.Minute) {
+		return errors.New("icmp interval must be between 1s and 60s")
+	}
 	if c.Server == "" {
 		return errors.New("server URL is required (-server or FENGHUO_SERVER)")
 	}
@@ -46,6 +54,26 @@ func (c Config) Validate() error {
 		return errors.New("ping interval must be between 10s and 10m")
 	}
 	return nil
+}
+
+func ParseICMPTargets(s string) ([]Target, error) {
+	var out []Target
+	seen := map[string]bool{}
+	for _, item := range strings.Split(s, ",") {
+		if strings.TrimSpace(item) == "" {
+			continue
+		}
+		name, addr, ok := strings.Cut(item, "=")
+		if !ok || name == "" || len(name) > proto.MaxPingNameLen || strings.IndexFunc(name, unicode.IsControl) >= 0 || seen[name] || net.ParseIP(addr).To4() == nil {
+			return nil, fmt.Errorf("invalid ICMP target %q, want unique name=IPv4", item)
+		}
+		seen[name] = true
+		out = append(out, Target{Name: name, Addr: addr})
+	}
+	if len(out) > proto.MaxPingTargets {
+		return nil, errors.New("too many ICMP targets")
+	}
+	return out, nil
 }
 
 // ParseTargets parses "name=host:port,name2=host:port".

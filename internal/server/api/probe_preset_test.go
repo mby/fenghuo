@@ -3,9 +3,44 @@ package api
 import (
 	"context"
 	"github.com/mby/fenghuo/internal/server/hub"
+	"github.com/mby/fenghuo/internal/server/store"
 	"strings"
 	"testing"
 )
+
+func TestSelectableProbeProtocols(t *testing.T) {
+	for _, tc := range []struct {
+		protocols string
+		valid     bool
+	}{{"CT=icmp,CU=both", true}, {"CT=tcp", true}, {"", true}, {"missing=icmp", false}, {"CT=udp", false}, {"CT=tcp,CT=icmp", false}} {
+		cfg := store.DefaultSettings()
+		cfg.ProbeTargets = "CT=192.0.2.10:80,CU=198.51.100.10:80"
+		cfg.ProbeProtocols = tc.protocols
+		if (validateSettings(&cfg) == nil) != tc.valid {
+			t.Fatalf("protocol preset %q", tc.protocols)
+		}
+	}
+}
+
+func TestICMPPresetWithoutPort(t *testing.T) {
+	for _, tc := range []struct {
+		targets, protocols string
+		valid              bool
+	}{
+		{"CT=192.0.2.10", "CT=icmp", true},
+		{"CT=192.0.2.10", "CT=tcp", false},
+		{"CT=192.0.2.10", "CT=both", false},
+		{"CT=192.0.2.10:80,", "CT=icmp", false},
+		{",", "", false},
+	} {
+		cfg := store.DefaultSettings()
+		cfg.ProbeTargets = tc.targets
+		cfg.ProbeProtocols = tc.protocols
+		if (validateSettings(&cfg) == nil) != tc.valid {
+			t.Fatalf("preset %q %q", tc.targets, tc.protocols)
+		}
+	}
+}
 
 func TestValidateProbeTargets(t *testing.T) {
 	for _, tc := range []struct {

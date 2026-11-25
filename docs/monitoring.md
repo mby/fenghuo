@@ -16,50 +16,19 @@ The public-page master switch still disables anonymous node data entirely.
 
 ## Network monitoring and alerts
 
-Node cards show up to three configured targets when fresh TCP probe data is available. Nodes without
-locally configured probes keep the same card layout. Node details display both TCP connect latency and the percentage of failed
-connection attempts. This is not ICMP packet loss. Each agent supports up to 16
-local targets; the homepage selection only changes display. Network history
-defaults to 24 hours, using minute records for recent periods and hourly summaries for
-longer periods (7 and 90 days of retention by default). The two periods are controlled
-by `-keep-minute-days` and `-keep-hour-days` respectively. Probe targets are configured
-only on each agent; the rule's optional target matches that local target name.
-Leaving it blank monitors any reported target, without creating or modifying probes.
+Each target's installation preset selects TCP, ICMP, or both. Presets only generate local configuration commands; the server never sends targets, protocols or intervals to agents. TCP uses IPv4:port and ICMP uses IPv4. Identically named TCP/ICMP targets remain separate series.
 
-Network history aggregates each range into at most about 360 points. Charts use that
-bucket size to identify gaps; demo data uses the same cadence and covers the full range.
-Missing records break the curve instead of becoming zero values. All-failed buckets
-retain their failure rate while latency remains unknown.
+Responsive cards show up to three names as individual rows with latency and failure strips. Each strip fills its width with 12 blocks, one per completed minute, and the label reads “Last 12 min”. The window follows the server clock to avoid gaps caused by a skewed browser clock. A cached minute-history query refreshes every 60 seconds and fills available history after server restarts; missing measurements and legacy records with unknown counts stay unknown. Overlapping live and stored records are never added together. Protocol buttons select ICMP/TCP. ICMP displays the median successful RTT when the window uses live samples, or the weighted successful mean when stored minute aggregates fill gaps; the tooltip identifies the statistic. TCP displays mean successful connect time. Loss/failure percentages use actual attempt counts over the same twelve-minute window. Detail history has its own protocol switch and uses weighted successful means, not medians. Latencies are never combined across targets. Existing TCP alerts retain their five-minute evaluation window.
 
-Homepage cards use a narrower grid with equal heights within each row. Attention reasons move into
-a tap- and keyboard-accessible hint beside the name; public descriptions have a separate hint,
-names stay on one line with an ellipsis when needed, and hovering shows the full name.
-Tags sit at the bottom. Offline cards use a muted panel
-for their paused-state message, last report time and a detail link. Traffic totals and
-a short expiration label share one footer line; the exact expiration remains in its hint. Clicking a homepage card
-or list row opens details in a dialog. Closing it, pressing Escape or using browser
-Back preserves dashboard filters, sorting and scroll position. Direct detail links
-and the Full page action still provide a standalone page. The network section defaults
-to a compact five-minute combined latency and highest target failure rate; open the
-probe popover to see up to three targets, their details and the short history strips
-without changing card height. Long target names wrap in the popover, which can be
-scrolled when necessary. Combined averages include only
-the displayed targets, weighted
-by successful connections for latency and by total attempts for failures.
-Each history block covers 30 seconds. Opening the popover leaves the strip hints hidden;
-hover a strip or focus it with the keyboard to inspect its values and target coverage.
-Arrow keys select a block. Missing blocks stay unknown. These strips reuse the memory
-window (at most 11 buckets per target), travel in the existing node response, obey
-the public-probe visibility setting and add no database storage or requests.
+The admin preset uses one shared probe interval for TCP and ICMP: 15, 30 or 60 seconds, default 30. Generated commands apply that value to both protocols. ICMP uses a 56-byte payload and a 2-second deadline; TCP uses a 5-second deadline. Standalone agent flags can still override the local intervals independently. Failed attempts count as failures; absent samples stay unknown. Permission and unsupported/local errors are shown separately and excluded from loss statistics. ICMP reflects replies from this destination, not an entire carrier network. Existing network alert rules continue to evaluate TCP only, preserving their configured meaning.
 
-Latency and failure-rate rules evaluate a five-minute in-memory probe window,
-trigger at or above the configured threshold for the configured duration, and
-recover below it. Latency averages successful attempts only; all-failed attempts
-are unknown for latency and 100% for the failure rule. Data older than two minutes
-is stale: it resets a pending duration and cannot generate a recovery. Keep the
-local ping interval comfortably below two minutes (default 30 seconds) for these
-alerts. Server restart resets the window; persisted firing state is retained.
-Historical charts retain the existing minute aggregation and retention policy.
+Linux uses unprivileged datagram ping sockets without CAP_NET_RAW. net.ipv4.ping_group_range must permit the service group. DynamicUser and an empty capability set remain enabled. The agent uses only the standard library, executes no commands, writes no files and only pushes reports. Other operating systems report ICMP as unsupported.
+
+A bounded in-memory queue retains samples until successful reporting; the server deduplicates by random process session and sequence. Measurement timestamps are translated using their offset from the report clock, so retries do not become new measurements. The queue holds 1024 samples, sends at most 128 per report and discards samples older than five minutes or beyond capacity; probe_dropped records discards and charts retain gaps. Process/server restarts do not provide durable delivery guarantees.
+
+Minute/hour history aggregates actual attempt counts, successful counts and latency sums. Legacy rows remain TCP with unknown (null) counts; queries containing legacy rows retain the old mean calculation rather than inventing denominators. Retention remains -keep-minute-days (7 days) and -keep-hour-days (90 days). Back up before migration; rollback requires the matching previous binary and database.
+
+Public probe visibility covers both protocols. Public responses contain only names, protocol and measurements, never addresses, tokens or private notes. Each agent supports up to 16 combined protocol/target pairs; enabling both counts twice.
 
 ## Notification delivery
 

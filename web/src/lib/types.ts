@@ -73,6 +73,11 @@ export interface PublicNode {
 }
 
 export interface NetworkProbe {
+  window_end?: number;
+  kind?: "tcp" | "icmp";
+  median_ms?: number;
+  error?: "permission" | "unsupported" | "local";
+  errors?: number;
   target: string;
   avg_ms: number;
   failure_rate: number;
@@ -148,11 +153,13 @@ export interface Metric {
 }
 
 export interface PingSeries {
+  kind?: "tcp" | "icmp";
   name: string;
-  points: { t: number; ms: number; loss: number }[];
+  points: { t: number; ms: number; loss: number; samples?: number | null; successes?: number | null }[];
 }
 
 export interface Settings {
+  probe_protocols?: string;
   agent_idle_interval: number;
   probe_targets: string;
   probe_cards: string;

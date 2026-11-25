@@ -55,3 +55,20 @@ grep -Fq '北京电信=192.0.2.4:80' "$root/etc/fenghuo/probes.env"
 bash "$root/configure.sh" --disable
 grep -Fxq 'FENGHUO_PING=' "$root/etc/fenghuo/probes.env"
 echo 'configure-probes tests passed'
+
+bash "$root/configure.sh" --ping 'CT=192.0.2.10:80' --icmp 'CT=192.0.2.10,CM=203.0.113.10' --icmp-interval 2s
+grep -Fxq 'FENGHUO_ICMP=CT=192.0.2.10,CM=203.0.113.10' "$root/etc/fenghuo/probes.env"
+grep -Fxq 'FENGHUO_ICMP_INTERVAL=2s' "$root/etc/fenghuo/probes.env"
+for invalid in 'CT=192.0.2.10:80' 'CT=999.1.1.1' 'CT=192.0.2.10,CT=203.0.113.10'; do
+  if bash "$root/configure.sh" --icmp "$invalid" >/dev/null 2>&1; then echo 'invalid ICMP target accepted' >&2; exit 1; fi
+done
+bash "$root/configure.sh" --disable
+grep -Fxq 'FENGHUO_ICMP=' "$root/etc/fenghuo/probes.env"
+
+for interval in 15s 30s 60s; do
+  bash "$root/configure.sh" --ping 'CT=192.0.2.10:80' --icmp 'CT=192.0.2.10' --ping-interval "$interval"
+  grep -Fxq "FENGHUO_PING_INTERVAL=$interval" "$root/etc/fenghuo/probes.env"
+  grep -Fxq "FENGHUO_ICMP_INTERVAL=$interval" "$root/etc/fenghuo/probes.env"
+done
+bash "$root/configure.sh" --icmp 'CT=192.0.2.10'
+grep -Fxq 'FENGHUO_ICMP_INTERVAL=30s' "$root/etc/fenghuo/probes.env"

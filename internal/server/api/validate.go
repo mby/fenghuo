@@ -178,8 +178,39 @@ func validateSettings(v *store.Settings) error {
 	if !slices.Contains([]int{15, 30, 60}, v.ProbeInterval) {
 		return errors.New("probe_interval must be 15, 30 or 60 seconds")
 	}
-	if err := validateProbeTargets(v.ProbeTargets); err != nil {
+	protocols := map[string]string{}
+	if v.ProbeProtocols != "" {
+		for _, entry := range strings.Split(v.ProbeProtocols, ",") {
+			name, kind, ok := strings.Cut(entry, "=")
+			if !ok || protocols[name] != "" || !strings.Contains(","+v.ProbeTargets, ","+name+"=") || (kind != "tcp" && kind != "icmp" && kind != "both") {
+				return errors.New("invalid probe protocol selection")
+			}
+			protocols[name] = kind
+		}
+	}
+	count := 0
+	normalized := []string{}
+	for _, entry := range strings.Split(v.ProbeTargets, ",") {
+		if entry == "" && v.ProbeTargets != "" {
+			return errors.New("empty probe target")
+		}
+		if entry != "" {
+			name, address, _ := strings.Cut(entry, "=")
+			if protocols[name] == "icmp" && net.ParseIP(address).To4() != nil {
+				entry = name + "=" + address + ":80"
+			}
+			normalized = append(normalized, entry)
+			count++
+			if protocols[name] == "both" {
+				count++
+			}
+		}
+	}
+	if err := validateProbeTargets(strings.Join(normalized, ",")); err != nil {
 		return err
+	}
+	if count > 16 {
+		return errors.New("at most 16 combined TCP/ICMP targets")
 	}
 	if v.ProbeCards != "" {
 		selected := strings.Split(v.ProbeCards, ",")

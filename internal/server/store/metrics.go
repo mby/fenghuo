@@ -27,11 +27,15 @@ type MetricRow struct {
 }
 
 type PingRow struct {
-	NodeID int64
-	Target string
-	TS     int64
-	AvgMS  float64 // -1 when every attempt in the minute failed
-	Loss   float64 // percent
+	Kind      string
+	Samples   int
+	Successes int
+	SumMS     float64
+	NodeID    int64
+	Target    string
+	TS        int64
+	AvgMS     float64 // -1 when every attempt in the minute failed
+	Loss      float64 // percent
 }
 
 type InfoRow struct {
@@ -76,9 +80,21 @@ func (s *Store) SaveBatch(ctx context.Context, b Batch) error {
 		}
 	}
 	for _, p := range b.Pings {
-		if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO ping_1m (node_id, target, ts, avg_ms, loss)
-			SELECT ?, ?, ?, ?, ? WHERE `+exists,
-			p.NodeID, p.Target, p.TS, p.AvgMS, p.Loss, p.NodeID); err != nil {
+		kind := p.Kind
+		if kind == "" {
+			kind = "tcp"
+		}
+		var samples, successes, sumMS any
+		if p.Samples > 0 {
+			samples, successes, sumMS = p.Samples, p.Successes, p.SumMS
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO ping_1m (node_id,target,kind,ts,avg_ms,loss,samples,successes,sum_ms)
+			SELECT ?,?,?,?,?,?,?,?,? WHERE `+exists+`
+			ON CONFLICT(node_id,target,kind,ts) DO UPDATE SET
+			avg_ms=CASE WHEN ping_1m.samples IS NOT NULL AND excluded.samples IS NOT NULL THEN CASE WHEN ping_1m.successes+excluded.successes>0 THEN (ping_1m.sum_ms+excluded.sum_ms)/(ping_1m.successes+excluded.successes) ELSE -1 END ELSE excluded.avg_ms END,
+			loss=CASE WHEN ping_1m.samples IS NOT NULL AND excluded.samples IS NOT NULL THEN 100.0*(ping_1m.samples+excluded.samples-ping_1m.successes-excluded.successes)/(ping_1m.samples+excluded.samples) ELSE excluded.loss END,
+			samples=ping_1m.samples+excluded.samples,successes=ping_1m.successes+excluded.successes,sum_ms=ping_1m.sum_ms+excluded.sum_ms`,
+			p.NodeID, p.Target, kind, p.TS, p.AvgMS, p.Loss, samples, successes, sumMS, p.NodeID); err != nil {
 			return fmt.Errorf("ping: %w", err)
 		}
 	}
@@ -142,12 +158,15 @@ func (s *Store) QueryMetrics(ctx context.Context, nodeID int64, res Resolution, 
 }
 
 type PingPoint struct {
-	T    int64   `json:"t"`
-	MS   float64 `json:"ms"` // -1 when no attempt succeeded
-	Loss float64 `json:"loss"`
+	Samples   *int64  `json:"samples"`
+	Successes *int64  `json:"successes"`
+	T         int64   `json:"t"`
+	MS        float64 `json:"ms"` // -1 when no attempt succeeded
+	Loss      float64 `json:"loss"`
 }
 
 type PingSeries struct {
+	Kind   string      `json:"kind"`
 	Name   string      `json:"name"`
 	Points []PingPoint `json:"points"`
 }
@@ -162,9 +181,8 @@ func (s *Store) QueryPingHours(ctx context.Context, nodeID, from, step int64) ([
 
 // table is chosen only by the two fixed callers above.
 func (s *Store) queryPing(ctx context.Context, nodeID, from, step int64, table string) ([]PingSeries, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT target, (ts / ?1) * ?1 AS b,
-		COALESCE(AVG(CASE WHEN avg_ms >= 0 THEN avg_ms END), -1), AVG(loss)
-		FROM `+table+` WHERE node_id = ?2 AND ts >= ?3 GROUP BY target, b ORDER BY target, b`, step, nodeID, from)
+	rows, err := s.db.QueryContext(ctx, `SELECT target,kind,(ts / ?1) * ?1 AS b,`+probeAggregateSQL+`
+		FROM `+table+` WHERE node_id = ?2 AND ts >= ?3 GROUP BY target,kind,b ORDER BY target,kind,b`, step, nodeID, from)
 	if err != nil {
 		return nil, err
 	}
@@ -172,12 +190,13 @@ func (s *Store) queryPing(ctx context.Context, nodeID, from, step int64, table s
 	out := []PingSeries{}
 	for rows.Next() {
 		var name string
+		var kind string
 		var p PingPoint
-		if err := rows.Scan(&name, &p.T, &p.MS, &p.Loss); err != nil {
+		if err := rows.Scan(&name, &kind, &p.T, &p.MS, &p.Loss, &p.Samples, &p.Successes); err != nil {
 			return nil, err
 		}
-		if len(out) == 0 || out[len(out)-1].Name != name {
-			out = append(out, PingSeries{Name: name})
+		if len(out) == 0 || out[len(out)-1].Name != name || out[len(out)-1].Kind != kind {
+			out = append(out, PingSeries{Name: name, Kind: kind})
 		}
 		last := &out[len(out)-1]
 		last.Points = append(last.Points, p)
@@ -198,10 +217,10 @@ func (s *Store) RollupHours(ctx context.Context, from, to int64) error {
 	if err != nil {
 		return fmt.Errorf("roll up metrics: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT OR REPLACE INTO ping_1h (node_id, target, ts, avg_ms, loss)
-		SELECT node_id, target, (ts / 3600) * 3600 AS h,
-		COALESCE(AVG(CASE WHEN avg_ms >= 0 THEN avg_ms END), -1), AVG(loss)
-		FROM ping_1m WHERE ts >= ? AND ts < ? GROUP BY node_id, target, h`, from, to)
+	_, err = s.db.ExecContext(ctx, `INSERT OR REPLACE INTO ping_1h (node_id,target,kind,ts,avg_ms,loss,samples,successes,sum_ms)
+		SELECT node_id,target,kind,(ts / 3600)*3600 AS h,`+probeAggregateSQL+`,
+		CASE WHEN COUNT(samples)=COUNT(*) THEN SUM(sum_ms) END
+		FROM ping_1m WHERE ts>=? AND ts<? GROUP BY node_id,target,kind,h`, from, to)
 	if err != nil {
 		return fmt.Errorf("roll up probes: %w", err)
 	}

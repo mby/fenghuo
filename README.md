@@ -52,7 +52,7 @@ it:
   quota, upcoming expiry
 - Notifications: Telegram and generic webhooks (Bark, WeCom, Feishu, DingTalk,
   Discord, ntfy, …)
-- Optional TCP latency targets, configured on each agent (for example, three
+- Optional TCP and unprivileged ICMP latency targets, configured on each agent (for example, three
   carrier endpoints)
 - Public status page with groups, which you can turn off. IP addresses are never shown.
 - Admin login with argon2id passwords, optional TOTP two-factor authentication

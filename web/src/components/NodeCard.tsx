@@ -205,7 +205,9 @@ export function NodeCard({ node, now, selection }: { node: PublicNode; now: numb
             )}
           </div>
         )}
-        {node.online && isVisible(node, "ping") && <NetworkSummary probes={node.network ?? []} now={now} />}
+        {node.online && isVisible(node, "ping") && (
+          <NetworkSummary uuid={node.uuid} probes={node.network ?? []} now={now} />
+        )}
         {(node.group || node.public_tags) && (
           <div className="mt-auto flex min-w-0 flex-wrap items-start gap-1.5 pt-1">
             {node.group && (

@@ -46,6 +46,11 @@ func networkValue(r store.Rule, stats []hub.NetworkStat) (hub.NetworkStat, float
 	value := -1.0
 	unknown := false
 	for _, s := range stats {
+		// Existing alert rules explicitly describe TCP; ICMP must not silently
+		// change their meaning when dual probes are enabled for the same name.
+		if s.Kind != "" && s.Kind != "tcp" {
+			continue
+		}
 		if r.Target != "" && s.Target != r.Target {
 			continue
 		}

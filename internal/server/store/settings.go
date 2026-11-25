@@ -18,13 +18,14 @@ type Settings struct {
 	// This is only an installation preset; it is never sent to a running agent.
 	AgentIdleInterval int `json:"agent_idle_interval"`
 	// ProbeTargets is a copyable local installation preset, never agent control.
-	ProbeTargets  string `json:"probe_targets"`
-	ProbeCards    string `json:"probe_cards"`
-	ProbeInterval int    `json:"probe_interval"`
-	PublicSystem  bool   `json:"public_system"`
-	PublicExpiry  bool   `json:"public_expiry"`
-	PublicTraffic bool   `json:"public_traffic"`
-	PublicPing    bool   `json:"public_ping"`
+	ProbeTargets   string `json:"probe_targets"`
+	ProbeProtocols string `json:"probe_protocols"`
+	ProbeCards     string `json:"probe_cards"`
+	ProbeInterval  int    `json:"probe_interval"`
+	PublicSystem   bool   `json:"public_system"`
+	PublicExpiry   bool   `json:"public_expiry"`
+	PublicTraffic  bool   `json:"public_traffic"`
+	PublicPing     bool   `json:"public_ping"`
 }
 
 func DefaultSettings() Settings {

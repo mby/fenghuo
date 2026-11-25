@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mby/fenghuo/internal/proto"
 	"github.com/mby/fenghuo/internal/server/hub"
@@ -55,7 +56,8 @@ func TestPublicPrivacyAndInstallPreset(t *testing.T) {
 				t.Fatalf("visible fields: %s", body)
 			}
 			probe := list[0].Network[0]
-			if probe.Samples != 1 || probe.Successes != 1 || len(probe.History) != 1 || probe.History[0].AvgMS != 18 {
+			// The current partial minute is excluded from the twelve-minute card.
+			if probe.Samples != 0 || probe.Successes != 0 || len(probe.History) != 0 || !probe.Fresh || probe.WindowEnd <= 0 || probe.WindowEnd > time.Now().Unix() {
 				t.Fatalf("probe history: %+v", probe)
 			}
 		} else if list[0].Info.Kernel != "" || list[0].ExpireAt != 0 || list[0].Traffic.Limit != 0 || list[0].Visibility.Ping || len(list[0].Network) != 0 {

@@ -156,9 +156,21 @@ function SiteSettings() {
           <legend className="float-left mb-1 w-full text-sm font-medium">{t("settings.probeTitle")}</legend>
           <p className="text-xs text-muted-foreground">{t("settings.probeHint")}</p>
           <ProbePresetFields
+            protocols={f.probe_protocols}
+            onProtocolsChange={(probe_protocols) => setF({ ...f, probe_protocols })}
             targets={f.probe_targets}
             cards={f.probe_cards}
-            onChange={(targets, cards) => setF({ ...f, probe_targets: targets, probe_cards: cards })}
+            onChange={(targets, cards) =>
+              setF({
+                ...f,
+                probe_targets: targets,
+                probe_cards: cards,
+                probe_protocols: (f.probe_protocols ?? "")
+                  .split(",")
+                  .filter((entry) => targets.split(",").some((target) => target.split("=")[0] === entry.split("=")[0]))
+                  .join(","),
+              })
+            }
           />
           <Field id="probe_interval" label={t("settings.probeInterval")}>
             <Select

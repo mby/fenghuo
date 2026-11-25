@@ -334,7 +334,7 @@ export function Dashboard() {
       ) : view === "list" ? (
         visible.length > 0 && <NodeList nodes={visible} now={now} selectionFor={comparing ? selectionFor : undefined} />
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fill,16.75rem)]">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(18rem,1fr))]">
           {visible.map((n) => (
             <NodeCard key={n.uuid} node={n} now={now} selection={comparing ? selectionFor(n) : undefined} />
           ))}

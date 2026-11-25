@@ -332,6 +332,13 @@ export function demoResponse(path: string, now = Math.floor(Date.now() / 1000)):
   if (!match) return undefined;
   const id = decodeURIComponent(match[1]);
   const range = url.searchParams.get("range") ?? "live";
+  if (match[2] === "ping" && range === "12m")
+    return demoPing(id, "1h", now).map((series) => ({
+      ...series,
+      points: series.points
+        .filter((point) => point.t >= Math.floor(now / 60) * 60 - 12 * 60 && point.t < Math.floor(now / 60) * 60)
+        .map((point) => ({ ...point, samples: 2, successes: point.ms < 0 ? 0 : 2 })),
+    }));
   if (!scenarios.some((s) => s.id === id) || !(range in ranges)) return undefined;
   if (match[2] === "metrics") return demoMetrics(id, range as Range, now);
   if (match[2] === "ping") return demoPing(id, range as Range, now);

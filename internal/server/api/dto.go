@@ -68,6 +68,11 @@ type publicNode struct {
 }
 
 type networkDTO struct {
+	WindowEnd    int64              `json:"window_end"`
+	Kind         string             `json:"kind"`
+	MedianMS     float64            `json:"median_ms"`
+	Error        string             `json:"error,omitempty"`
+	Errors       int                `json:"errors"`
 	Target       string             `json:"target"`
 	AvgMS        float64            `json:"avg_ms"`
 	FailureRate  float64            `json:"failure_rate"`
@@ -118,13 +123,19 @@ func toPublic(v hub.View) publicNode {
 			NextResetAt: v.NextResetAt, ResetUTCOffset: v.ResetUTCOffset,
 		},
 	}
-	for _, stat := range v.Network {
+	stats := v.CardNetwork
+	if stats == nil {
+		stats = v.Network
+	}
+	for _, stat := range stats {
 		if stat.Fresh {
 			history := make([]networkBucketDTO, 0, len(stat.History))
 			for _, b := range stat.History {
 				history = append(history, networkBucketDTO{T: b.T, AvgMS: b.AvgMS, Samples: b.Samples, Successes: b.Successes})
 			}
 			n.Network = append(n.Network, networkDTO{
+				WindowEnd: stat.WindowEnd,
+				Kind:      stat.Kind, MedianMS: stat.MedianMS, Error: stat.Error, Errors: stat.Errors,
 				Target: stat.Target, AvgMS: stat.AvgMS, FailureRate: stat.FailureRate,
 				Fresh: stat.Fresh, LatencyFresh: stat.LatencyFresh,
 				Samples: stat.Count, Successes: stat.SuccessCount, History: history,
@@ -171,7 +182,6 @@ func (s *Server) nodeForViewer(v hub.View, admin bool) publicNode {
 			for _, probe := range n.Network {
 				if probe.Target == name {
 					selected = append(selected, probe)
-					break
 				}
 			}
 		}
@@ -186,7 +196,6 @@ func (s *Server) nodeForViewer(v hub.View, admin bool) publicNode {
 			for _, probe := range n.Network {
 				if probe.Target == name {
 					selected = append(selected, probe)
-					break
 				}
 			}
 		}
@@ -195,7 +204,8 @@ func (s *Server) nodeForViewer(v hub.View, admin bool) publicNode {
 		}
 	}
 	if len(selected) > 3 {
-		selected = selected[:3]
+		// Up to three configured names, each independently measured with TCP/ICMP.
+		selected = selected[:min(6, len(selected))]
 	}
 	n.Network = selected
 	if admin {

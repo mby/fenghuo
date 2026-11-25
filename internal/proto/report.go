@@ -69,8 +69,23 @@ type Report struct {
 	// Info is static host information, sent on start and then periodically.
 	Info *Info `json:"info,omitempty"`
 	// Ping holds the latest TCP latency round, only when a new round completed.
-	Ping []Ping `json:"ping,omitempty"`
+	Ping         []Ping  `json:"ping,omitempty"`
+	ProbeSession string  `json:"probe_session,omitempty"`
+	Probes       []Probe `json:"probes,omitempty"`
+	ProbeDropped uint64  `json:"probe_dropped,omitempty"`
 }
+
+// Probe contains a single locally scheduled attempt. Addresses never leave the agent.
+type Probe struct {
+	Name  string  `json:"name"`
+	Kind  string  `json:"kind"`
+	MS    float64 `json:"ms"`
+	Time  int64   `json:"t"`
+	Seq   uint64  `json:"seq"`
+	Error string  `json:"error,omitempty"`
+}
+
+const MaxProbeBatch = 128
 
 type Info struct {
 	OS           string `json:"os"`
@@ -89,6 +104,40 @@ type Ping struct {
 }
 
 func (r *Report) Validate() error {
+	if len(r.Probes) > MaxProbeBatch {
+		return errors.New("too many probe samples")
+	}
+	if len(r.Probes) > 0 {
+		if len(r.ProbeSession) != 32 {
+			return errors.New("invalid probe session")
+		}
+		for _, c := range r.ProbeSession {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				return errors.New("invalid probe session")
+			}
+		}
+		var seq uint64
+		for _, p := range r.Probes {
+			if err := validText("probe name", p.Name, MaxPingNameLen); err != nil {
+				return err
+			}
+			if p.Name == "" || (p.Kind != "tcp" && p.Kind != "icmp") || p.Seq <= seq || p.Time <= 0 || p.Time > r.Time+1000 || r.Time-p.Time > 600000 {
+				return errors.New("invalid probe sample")
+			}
+			if p.MS != -1 {
+				if err := inRange("probe ms", p.MS, 0, 60000); err != nil {
+					return err
+				}
+			}
+			if p.Error != "" && (p.Error != "permission" && p.Error != "unsupported" && p.Error != "local") {
+				return errors.New("invalid probe error")
+			}
+			if p.Error != "" && p.MS != -1 {
+				return errors.New("probe error with successful latency")
+			}
+			seq = p.Seq
+		}
+	}
 	if r.V != Version {
 		return fmt.Errorf("unsupported protocol version %d", r.V)
 	}

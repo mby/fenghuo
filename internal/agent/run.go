@@ -25,11 +25,8 @@ func Run(ctx context.Context, cfg Config, log *slog.Logger) error {
 		return err
 	}
 
-	var p *pinger
-	if len(cfg.Ping) > 0 {
-		p = &pinger{targets: cfg.Ping}
-		go p.run(ctx, cfg.PingInterval)
-	}
+	probes := newProbeQueue()
+	probes.start(ctx, cfg)
 
 	log.Info("agent started", "version", version.Version, "server", cfg.Server,
 		"interval", cfg.Interval, "idle_interval", cfg.IdleInterval, "ping_targets", len(cfg.Ping))
@@ -63,9 +60,8 @@ func Run(ctx context.Context, cfg Config, log *slog.Logger) error {
 			info := col.Info()
 			rep.Info = &info
 		}
-		if p != nil {
-			rep.Ping = p.take()
-		}
+		rep.ProbeSession = probes.session
+		rep.Probes, rep.ProbeDropped = probes.batch(now)
 
 		sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		watched, err := client.Send(sendCtx, &rep)
@@ -85,6 +81,9 @@ func Run(ctx context.Context, cfg Config, log *slog.Logger) error {
 		}
 		if rep.Info != nil {
 			lastInfo = now
+		}
+		if len(rep.Probes) > 0 {
+			probes.ack(rep.Probes[len(rep.Probes)-1].Seq)
 		}
 		if failing {
 			log.Info("report recovered")

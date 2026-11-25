@@ -74,7 +74,8 @@ func (s *Server) lookup(w http.ResponseWriter, r *http.Request, admin bool) (hub
 }
 
 var ranges = map[string]time.Duration{
-	"1h": time.Hour, "6h": 6 * time.Hour, "24h": 24 * time.Hour,
+	"12m": 12 * time.Minute,
+	"1h":  time.Hour, "6h": 6 * time.Hour, "24h": 24 * time.Hour,
 	"7d": 7 * 24 * time.Hour, "30d": 30 * 24 * time.Hour, "90d": 90 * 24 * time.Hour,
 }
 
@@ -139,7 +140,11 @@ func (s *Server) handlePing(w http.ResponseWriter, r *http.Request, admin bool) 
 	if d > s.KeepMinute {
 		query = s.Store.QueryPingHours
 	}
-	series, err := query(r.Context(), v.Node.ID, time.Now().Add(-d).Unix(), step)
+	from := time.Now().Add(-d)
+	if rng == "12m" {
+		from = time.Now().Truncate(time.Minute).Add(-d)
+	}
+	series, err := query(r.Context(), v.Node.ID, from.Unix(), step)
 	if err != nil {
 		s.Log.Error("query ping", "err", err)
 		writeError(w, http.StatusInternalServerError, "internal_error")

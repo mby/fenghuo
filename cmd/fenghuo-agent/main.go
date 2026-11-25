@@ -36,6 +36,8 @@ func run() error {
 	nic := fs.String("nic", "", "comma-separated interfaces counted for traffic (default: auto-detect physical interfaces)")
 	ping := fs.String("ping", "", "TCP latency targets, e.g. \"CT=example.com:80,CU=1.2.3.4:443\"")
 	pingInterval := fs.Duration("ping-interval", 30*time.Second, "TCP latency measurement interval (10s-10m)")
+	icmp := fs.String("icmp", "", "ICMP echo targets, e.g. name=1.2.3.4")
+	icmpInterval := fs.Duration("icmp-interval", 2*time.Second, "ICMP echo interval (1s-60s)")
 	allowHTTP := fs.Bool("allow-http", false, "allow plain http to a non-loopback server (sends the token unencrypted)")
 	printOnce := fs.Bool("print", false, "collect once, print the report as JSON and exit")
 	showVersion := fs.Bool("version", false, "print version and exit")
@@ -66,6 +68,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	icmpTargets, err := agent.ParseICMPTargets(*icmp)
+	if err != nil {
+		return err
+	}
 	cfg := agent.Config{
 		Server:       *server,
 		Token:        *token,
@@ -74,6 +80,8 @@ func run() error {
 		NICs:         nics,
 		Ping:         targets,
 		PingInterval: *pingInterval,
+		ICMP:         icmpTargets,
+		ICMPInterval: *icmpInterval,
 		AllowHTTP:    *allowHTTP,
 	}
 

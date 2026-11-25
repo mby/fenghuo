@@ -271,3 +271,15 @@ URL（会做 URL 转义）和请求体模板（会做 JSON 转义）中都可以
 
 规则可以作用于全部服务器或选定的服务器。从未上报过的服务器不会触发离线告警。告警状态在重启后
 仍然保留，一次性告警不会重复发送。
+
+## ICMP 与协议选择
+
+`-icmp` / `FENGHUO_ICMP` 接受 `名称=IPv4` 列表；`-icmp-interval` / `FENGHUO_ICMP_INTERVAL` 默认 `2s`，允许 `1s`–`60s`。现有 `-ping` 继续代表 TCP。后台安装预设可为每个目标选择 TCP、ICMP 或两者；生成的安装和配置命令对两种协议使用同一个“探测间隔”（15/30/60 秒，默认 30 秒）。保存不会远程修改 Agent。当前服务端自带 `/configure-probes.sh`，生成的配置命令使用与面板相同版本的脚本。新 Agent 的发布安装包也必须包含此版本；旧版 Agent 需先升级后使用 ICMP。
+
+```bash
+sudo bash configure-probes.sh --ping '示例目标=192.0.2.10:80' --ping-interval 30s --icmp '示例目标=192.0.2.10' --icmp-interval 30s
+```
+
+配置脚本未显式指定 --icmp-interval 时，两种探测共用 --ping-interval（默认 30s）。脚本覆盖本地探测目标集合，保留 Agent Token 和服务端配置；`--disable` 同时关闭两种探测。
+
+`192.0.2.10` 为文档示例地址，使用时请替换为自己的可达探测目标。

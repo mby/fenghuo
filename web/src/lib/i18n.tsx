@@ -1,6 +1,25 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 const en = {
+  "network.protocol": "Probe protocol",
+  "network.bucketCounts": "{ms} · {received}/{sent} successful",
+  "network.tcp": "TCP",
+  "network.icmp": "ICMP",
+  "network.both": "TCP + ICMP",
+  "network.window": "Last 12 min",
+  "network.minuteCells":
+    "12 completed minutes · 1 minute per block, aligned to server time. Missing minutes stay unknown.",
+  "network.loss": "Packet loss",
+  "network.median": "Median RTT",
+  "network.sampleCounts": "{received} successful / {sent} attempts",
+  "network.icmpHint":
+    "ICMP echo replies. Grey gaps have no samples; coloured blocks indicate loss. This measures this destination, not the entire carrier network.",
+  "network.localErrors": "{n} local probe errors excluded from loss statistics",
+  "network.localConfigHint":
+    "TCP and ICMP share the probe interval selected below. Save this preset, then apply the generated command locally on each agent.",
+  "network.error.permission": "Permission",
+  "network.error.unsupported": "Unsupported",
+  "network.error.local": "Local error",
   "demo.mode": "UI demo data · local preview",
   "demo.exit": "Exit demo",
   "traffic.nextReset": "Next traffic reset",
@@ -30,19 +49,19 @@ const en = {
   "privacy.public_system": "System and hardware details",
   "privacy.public_expiry": "Expiration dates",
   "privacy.public_traffic": "Monthly traffic and quotas",
-  "privacy.public_ping": "TCP probe history",
+  "privacy.public_ping": "Network probe history",
   "settings.idleInterval": "Idle interval for new installations",
   "settings.idleHint": "Used in generated installation commands. Existing agents are not reconfigured remotely.",
   "settings.seconds": "{n} seconds",
   "settings.idleLocal": "Local configuration",
   "settings.idleApply":
     "For existing agents, edit /etc/fenghuo/agent.env and restart fenghuo-agent locally. The idle interval must not be shorter than the normal interval.",
-  "settings.probeTitle": "Optional TCP probes",
+  "settings.probeTitle": "Optional network probes",
   "settings.probeHint":
-    "Save a local command template for up to 16 targets. Existing agents need the configuration command run locally.",
+    "Save up to 16 protocol/target pairs (both counts twice). Apply the generated command locally on each agent.",
   "settings.probeTargets": "Probe targets",
   "settings.probeTargetsHint":
-    "One name=IPv4:port per line. Names may use letters, numbers, _, - and . (up to 32 UTF-8 bytes). Names are public; keep addresses on the right of =.",
+    "One name=IPv4:port per line; ICMP-only targets may omit the port. Names use letters, numbers, _, - or . (32 UTF-8 bytes). Names are public; keep addresses after =.",
   "settings.probeExample": "Shanghai-CT=1.2.3.4:443\nShanghai-CU=1.2.3.5:443\nBeijing-CM=1.2.3.6:443",
   "settings.probeHomepage": "Homepage targets",
   "settings.probeCapacity":
@@ -52,7 +71,7 @@ const en = {
   "settings.probeCT": "Telecom (CT)",
   "settings.probeCU": "Unicom (CU)",
   "settings.probeCM": "Mobile (CM)",
-  "settings.probeInterval": "Probe interval",
+  "settings.probeInterval": "Probe interval (TCP / ICMP)",
   "settings.probeApply": "Apply saved targets on an existing agent",
   "settings.probeDisable": "Disable probes on an existing agent",
   "settings.probeApplyHint":
@@ -546,6 +565,22 @@ const en = {
 export type MessageKey = keyof typeof en;
 
 const zh: Record<MessageKey, string> = {
+  "network.protocol": "探测协议",
+  "network.bucketCounts": "{ms} · 成功 {received}/{sent}",
+  "network.tcp": "TCP",
+  "network.icmp": "ICMP",
+  "network.both": "TCP + ICMP",
+  "network.window": "近 12 分钟",
+  "network.minuteCells": "最近 12 个完整分钟，每格 1 分钟，按服务端时间对齐；缺失分钟保持未知。",
+  "network.loss": "丢包率",
+  "network.median": "中位往返延迟",
+  "network.sampleCounts": "成功 {received} / 尝试 {sent} 次",
+  "network.icmpHint": "ICMP 回显探测。浅色空格表示无样本，彩色块表示丢包。结果仅代表到此目标的探测情况。",
+  "network.localErrors": "已排除 {n} 次本地探测错误，不计入丢包率",
+  "network.localConfigHint": "TCP 与 ICMP 共用下方选择的探测间隔。保存预设后，在各 Agent 本地执行生成的命令。",
+  "network.error.permission": "权限不足",
+  "network.error.unsupported": "不支持",
+  "network.error.local": "本地错误",
   "demo.mode": "UI 演示数据 · 仅本地预览",
   "demo.exit": "退出演示",
   "traffic.nextReset": "下次流量重置",
@@ -572,18 +607,18 @@ const zh: Record<MessageKey, string> = {
   "privacy.public_system": "系统与硬件详情",
   "privacy.public_expiry": "到期日期",
   "privacy.public_traffic": "月流量与额度",
-  "privacy.public_ping": "TCP 探测历史",
+  "privacy.public_ping": "网络探测历史",
   "settings.idleInterval": "新安装 Agent 的空闲上报间隔",
   "settings.idleHint": "用于生成安装命令，不会远程修改已有 Agent。",
   "settings.seconds": "{n} 秒",
   "settings.idleLocal": "本地配置",
   "settings.idleApply":
     "已有 Agent 请在本机 /etc/fenghuo/agent.env 中修改此值，然后重启 fenghuo-agent。空闲间隔不能短于正常上报间隔。",
-  "settings.probeTitle": "可选三网 TCP 探测",
-  "settings.probeHint": "可保存最多 16 个目标的本地配置模板；已有 Agent 需在本机运行配置命令。",
+  "settings.probeTitle": "可选网络探测",
+  "settings.probeHint": "最多 16 个协议/目标组合，双协议计两个；保存后需在各 Agent 本地执行配置命令。",
   "settings.probeTargets": "探测目标",
   "settings.probeTargetsHint":
-    "每行填写 名称=IPv4:端口。名称支持中英文、数字、_、-、.（最多 32 字节）；名称会公开，IP 请放在等号右侧。",
+    "每行填写 名称=IPv4:端口；仅 ICMP 可省略端口。名称支持中英文、数字、_、-、.（最多 32 字节）；名称会公开，IP 请放在等号右侧。",
   "settings.probeExample": "上海电信=1.2.3.4:443\n上海联通=1.2.3.5:443\n北京移动=1.2.3.6:443",
   "settings.probeHomepage": "首页展示目标",
   "settings.probeCapacity":
@@ -592,7 +627,7 @@ const zh: Record<MessageKey, string> = {
   "settings.probeCT": "电信（CT）",
   "settings.probeCU": "联通（CU）",
   "settings.probeCM": "移动（CM）",
-  "settings.probeInterval": "探测间隔",
+  "settings.probeInterval": "探测间隔（TCP / ICMP）",
   "settings.probeApply": "在已有 Agent 上应用已保存的目标",
   "settings.probeDisable": "在已有 Agent 上关闭探测",
   "settings.probeApplyHint":

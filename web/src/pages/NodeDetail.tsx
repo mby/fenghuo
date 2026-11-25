@@ -283,8 +283,12 @@ function NetworkHistory({ uuid, keepHours, minuteHours }: { uuid: string; keepHo
   const { t } = useI18n();
   const [range, setRange] = useState<Range>("24h");
   const [selected, setSelected] = useState<string[] | null>(null);
+  const [protocol, setProtocol] = useState<"icmp" | "tcp">("icmp");
   const ping = usePing(uuid, range, true);
-  const all = ping.data ?? [];
+  const raw = ping.data ?? [];
+  const available = (["icmp", "tcp"] as const).filter((kind) => raw.some((series) => (series.kind ?? "tcp") === kind));
+  const activeProtocol = available.includes(protocol) ? protocol : (available[0] ?? "tcp");
+  const all = raw.filter((series) => (series.kind ?? "tcp") === activeProtocol);
   const names = selected ?? all.slice(0, 3).map((series) => series.name);
   const visible = all.filter((series) => names.includes(series.name));
   const gapSeconds = pingBucketSeconds(RANGE_HOURS[range], minuteHours) * 1.5;
@@ -300,6 +304,23 @@ function NetworkHistory({ uuid, keepHours, minuteHours }: { uuid: string; keepHo
         </p>
       </div>
       <fieldset className="flex flex-wrap gap-1" aria-label={t("network.historyRange")}>
+        {available.map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            aria-pressed={activeProtocol === kind}
+            onClick={() => {
+              setProtocol(kind);
+              setSelected(null);
+            }}
+            className={cn(
+              "min-h-9 rounded-md px-3 text-sm",
+              activeProtocol === kind ? "bg-secondary text-secondary-foreground" : "text-muted-foreground",
+            )}
+          >
+            {t(kind === "icmp" ? "network.icmp" : "network.tcp")}
+          </button>
+        ))}
         {ranges.map((value) => (
           <button
             type="button"
@@ -380,7 +401,7 @@ function PingChart({
   return (
     <>
       <MetricChart
-        title={t("chart.ping")}
+        title={series[0]?.kind === "icmp" ? `${t("network.icmp")} · ${t("network.averageLatency")}` : t("chart.ping")}
         data={rows}
         series={defs}
         format={(v) => `${v.toFixed(v >= 100 ? 0 : 1)} ms`}
@@ -388,8 +409,8 @@ function PingChart({
         scale={scale}
       />
       <MetricChart
-        title={t("network.failureRate")}
-        aside={t("network.tcpHint")}
+        title={t(series[0]?.kind === "icmp" ? "network.loss" : "network.failureRate")}
+        aside={t(series[0]?.kind === "icmp" ? "network.icmpHint" : "network.tcpHint")}
         data={rows}
         series={defs.map((d, i) => ({ ...d, key: `loss${i}` }))}
         format={percent}

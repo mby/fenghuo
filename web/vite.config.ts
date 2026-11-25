@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -13,6 +13,7 @@ function keepGitkeep(): Plugin {
     name: "keep-gitkeep",
     closeBundle() {
       writeFileSync(path.join(outDir, ".gitkeep"), "");
+      writeFileSync(path.join(outDir, "configure-probes.sh"), readFileSync(path.resolve(import.meta.dirname, "../deploy/configure-probes.sh")));
     },
   };
 }

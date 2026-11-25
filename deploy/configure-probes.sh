@@ -8,6 +8,8 @@ DROPIN_DIR=/etc/systemd/system/fenghuo-agent.service.d
 DROPIN_FILE=$DROPIN_DIR/10-probes.conf
 PING=""
 INTERVAL=30s
+ICMP=""
+ICMP_INTERVAL=""
 DISABLE=0
 
 die() { echo "error: $*" >&2; exit 1; }
@@ -17,17 +19,24 @@ usage() {
 Usage: configure-probes.sh --ping 'CT=1.2.3.4:80,CU=...' [--ping-interval 30s]
        configure-probes.sh --disable
 
-Run as root on each agent host. Targets are TCP connect probes, not ICMP ping.
+       configure-probes.sh --icmp 'CT=1.2.3.4,CU=...' [--ping-interval 30s]
+       --icmp-interval overrides the shared interval for manual local configuration.
+Run as root on each agent host. TCP and ICMP may be enabled together.
 EOF
 }
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
-	--ping | --ping-interval)
+	--ping | --ping-interval | --icmp | --icmp-interval)
 		if [ "$#" -lt 2 ] || [ -z "$2" ] || [[ "$2" == -* ]]; then
 			die "$1 requires a value"
 		fi
-		if [ "$1" = --ping ]; then PING=$2; else INTERVAL=$2; fi
+		case "$1" in
+		--ping) PING=$2 ;;
+		--ping-interval) INTERVAL=$2 ;;
+		--icmp) ICMP=$2 ;;
+		--icmp-interval) ICMP_INTERVAL=$2 ;;
+		esac
 		shift 2 ;;
 	--disable) DISABLE=1; shift ;;
 	-h | --help) usage; exit 0 ;;
@@ -41,19 +50,31 @@ if [ ! -f "$ENV_FILE" ] || [ ! -f /etc/systemd/system/fenghuo-agent.service ]; t
 fi
 command -v systemctl >/dev/null 2>&1 || die "systemd is required"
 [[ "$INTERVAL" =~ ^(15|30|60)s$ ]] || die "--ping-interval must be 15s, 30s or 60s"
+ICMP_INTERVAL=${ICMP_INTERVAL:-$INTERVAL}
+[[ "$ICMP_INTERVAL" =~ ^([1-9]|[1-5][0-9]|60)s$ ]] || die "--icmp-interval must be 1s-60s"
 if [ "$DISABLE" -eq 1 ]; then
-	[ -z "$PING" ] || die "--disable cannot be combined with --ping"
+	[ -z "$PING$ICMP" ] || die "--disable cannot be combined with probe targets"
 else
-	[ -n "$PING" ] || die "--ping is required (or use --disable)"
-	[[ "$PING" != *[$'\n\r\t "\x27\\$`']* ]] || die "invalid --ping"
-	[[ "$PING" != ,* && "$PING" != *, && "$PING" != *,,* ]] || die "empty probe target"
+	[ -n "$PING$ICMP" ] || die "--ping or --icmp is required (or use --disable)"
+fi
+total_targets=0
+validate_targets() {
+	local raw=$1 kind=$2
+	[ -n "$raw" ] || return 0
+	[[ "$raw" != *[$'\n\r\t "\x27\\$`']* ]] || die "invalid probe targets"
+	[[ "$raw" != ,* && "$raw" != *, && "$raw" != *,,* ]] || die "empty probe target"
 	seen_names=$'\n'
-	IFS=',' read -r -a entries <<< "$PING"
-	[ "${#entries[@]}" -le 16 ] || die "at most 16 targets are allowed"
+	IFS=',' read -r -a entries <<< "$raw"
+	total_targets=$((total_targets+${#entries[@]}))
+	[ "$total_targets" -le 16 ] || die "at most 16 combined targets are allowed"
 	for entry in "${entries[@]}"; do
 		[[ "$entry" == *=* ]] || die "invalid target: $entry"
 		name=${entry%%=*}
 		address=${entry#*=}
+		if [ "$kind" = icmp ]; then
+			[[ "$address" != *:* ]] || die "ICMP target must be IPv4 without a port"
+			address="$address:80"
+		fi
 		if [ -z "$name" ] || [ "$(printf %s "$name" | wc -c)" -gt 32 ] || [[ "$name" == *=* ]]; then
 			die "target names must be 1-32 bytes"
 		fi
@@ -71,7 +92,9 @@ else
 			die "invalid TCP port"
 		fi
 	done
-fi
+}
+validate_targets "$PING" tcp
+validate_targets "$ICMP" icmp
 
 if [ -L "$PROBES_FILE" ] || [ -L "$DROPIN_FILE" ]; then
 	die "probe configuration must not be symlinks"
@@ -88,6 +111,8 @@ if [ -e "$DROPIN_FILE" ]; then cp -p -- "$DROPIN_FILE" "$work/previous.conf"; ha
 {
 	printf 'FENGHUO_PING=%s\n' "$PING"
 	printf 'FENGHUO_PING_INTERVAL=%s\n' "$INTERVAL"
+	printf 'FENGHUO_ICMP=%s\n' "$ICMP"
+	printf 'FENGHUO_ICMP_INTERVAL=%s\n' "$ICMP_INTERVAL"
 } > "$work/probes.env"
 install -m 0600 -o root -g root "$work/probes.env" "$work/next.env"
 cat > "$work/10-probes.conf" <<'EOF'

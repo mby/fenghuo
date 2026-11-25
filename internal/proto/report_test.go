@@ -2,6 +2,34 @@ package proto
 
 import "testing"
 
+func TestProbeBatchValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*Report)
+		valid  bool
+	}{
+		{"valid", func(*Report) {}, true},
+		{"session", func(r *Report) { r.ProbeSession = "bad" }, false},
+		{"protocol", func(r *Report) { r.Probes[0].Kind = "http" }, false},
+		{"sequence", func(r *Report) { r.Probes = append(r.Probes, r.Probes[0]) }, false},
+		{"future", func(r *Report) { r.Probes[0].Time = r.Time + 1001 }, false},
+		{"expired", func(r *Report) { r.Probes[0].Time = r.Time - 600001 }, false},
+		{"error", func(r *Report) { r.Probes[0].Error = "arbitrary" }, false},
+		{"local", func(r *Report) { r.Probes[0].Error = "permission"; r.Probes[0].MS = -1 }, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := validReport()
+			r.Time = 1800000000000
+			r.ProbeSession = "01234567890123456789012345678901"
+			r.Probes = []Probe{{Name: "CT", Kind: "icmp", MS: 100, Time: r.Time, Seq: 1}}
+			tc.mutate(&r)
+			if (r.Validate() == nil) != tc.valid {
+				t.Fatal("unexpected probe validation")
+			}
+		})
+	}
+}
+
 func validReport() Report {
 	return Report{
 		V: Version, CPU: 12.5, Load1: 0.3,

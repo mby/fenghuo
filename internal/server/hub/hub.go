@@ -56,9 +56,11 @@ type node struct {
 	acc     accum
 	pending []store.Metric
 
-	pings       map[string]*pingAcc
-	pingPending []store.PingRow
-	network     map[string]*probeWindow
+	pings         map[string]*pingAcc
+	pingPending   []store.PingRow
+	network       map[string]*probeWindow
+	probeSessions map[string]uint64
+	probeMinutes  map[probeMinute]*pingAcc
 
 	traffic      store.Traffic
 	trafficDirty bool
@@ -165,6 +167,7 @@ func (h *Hub) Ingest(tokenHash string, r *proto.Report, ip string, now time.Time
 	n.addMinute(m)
 	n.addPings(r.Ping, now)
 	n.addNetwork(r.Ping, now)
+	n.addProbes(r, now)
 	return watched, nil
 }
 
@@ -230,6 +233,7 @@ type View struct {
 	NextResetAt    int64
 	ResetUTCOffset int
 	Network        []NetworkStat // internal only; public responses use explicit DTOs
+	CardNetwork    []NetworkStat
 }
 
 // offlineAfter is how long a node may stay silent before it is offline: three
@@ -254,6 +258,7 @@ func (n *node) view(now, startedAt time.Time) View {
 	next := NextPeriodStart(now, n.cfg.TrafficResetDay)
 	_, offset := next.Zone()
 	v := View{Node: n.cfg, Info: n.info, LastSeen: n.lastSeen, Status: n.last, Traffic: n.traffic, Network: n.networkStats(now)}
+	v.CardNetwork = n.cardNetworkStats(now)
 	v.NextResetAt, v.ResetUTCOffset = next.Unix(), offset
 	if n.lastSeen.IsZero() {
 		v.Online = n.info.UpdatedAt > 0 && now.Sub(startedAt) < restartGrace
@@ -339,6 +344,14 @@ func (h *Hub) Drain(now time.Time, flushAll bool) store.Batch {
 		}
 		b.Pings = append(b.Pings, n.pingPending...)
 		n.pingPending = nil
+		for key, a := range n.probeMinutes {
+			if flushAll || key.minute < current {
+				row := a.row(id, key.name)
+				row.Kind = key.kind
+				b.Pings = append(b.Pings, row)
+				delete(n.probeMinutes, key)
+			}
+		}
 
 		if n.infoDirty {
 			b.Infos = append(b.Infos, store.InfoRow{NodeID: id, NodeInfo: n.info})

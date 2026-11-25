@@ -22,6 +22,8 @@ IDLE_INTERVAL=""
 NIC=""
 PING=""
 PING_INTERVAL=""
+ICMP=""
+ICMP_INTERVAL=""
 MIRROR=""
 ALLOW_HTTP=""
 MODE="install"
@@ -68,6 +70,8 @@ Usage: install-agent.sh [options]
   --ping "CT=host:80,CU=host:443"
                       TCP latency targets measured by this agent
   --ping-interval 30s  TCP probe interval (15s, 30s or 60s)
+  --icmp "CT=1.2.3.4"  ICMP echo targets (IPv4, no port)
+  --icmp-interval 2s   ICMP interval (1s-60s)
   --version vX.Y.Z    install a specific release (default: latest)
   --mirror PREFIX     prefix for GitHub download URLs, e.g. https://ghproxy.example.com/
   --allow-http        allow a plain http server URL (sends the token unencrypted)
@@ -85,6 +89,8 @@ while [ $# -gt 0 ]; do
 	--nic) require_value "$@"; NIC="$2"; shift 2 ;;
 	--ping) require_value "$@"; PING="$2"; shift 2 ;;
 	--ping-interval) require_value "$@"; PING_INTERVAL="$2"; shift 2 ;;
+	--icmp) require_value "$@"; ICMP="$2"; shift 2 ;;
+	--icmp-interval) require_value "$@"; ICMP_INTERVAL="$2"; shift 2 ;;
 	--version) require_value "$@"; VERSION="$2"; shift 2 ;;
 	--mirror) require_value "$@"; MIRROR="$2"; shift 2 ;;
 	--allow-http) ALLOW_HTTP=1; shift ;;
@@ -129,6 +135,8 @@ if [ "$MODE" = "install" ]; then
 	[ -z "$NIC" ] || [[ "$NIC" =~ ^[A-Za-z0-9_.@,:-]+$ ]] || die "invalid --nic"
 	[ -z "$PING" ] || safe "$PING" || die "invalid --ping"
 	[ -z "$PING_INTERVAL" ] || [[ "$PING_INTERVAL" =~ ^(15|30|60)s$ ]] || die "invalid --ping-interval"
+	[ -z "$ICMP" ] || safe "$ICMP" || die "invalid --icmp"
+	[ -z "$ICMP_INTERVAL" ] || [[ "$ICMP_INTERVAL" =~ ^([1-9]|[1-5][0-9]|60)s$ ]] || die "invalid --icmp-interval"
 fi
 [[ "$VERSION" == "latest" || "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9.]+)?$ ]] || die "invalid --version"
 [ -z "$MIRROR" ] || [[ "$MIRROR" =~ ^https://[A-Za-z0-9._:/-]+$ ]] || die "--mirror must be an https URL prefix"
@@ -186,6 +194,8 @@ if [ "$MODE" = "install" ]; then
 			[ -z "$NIC" ] || echo "FENGHUO_NIC=$NIC"
 			[ -z "$PING" ] || echo "FENGHUO_PING=$PING"
 			[ -z "$PING_INTERVAL" ] || echo "FENGHUO_PING_INTERVAL=$PING_INTERVAL"
+			[ -z "$ICMP" ] || echo "FENGHUO_ICMP=$ICMP"
+			[ -z "$ICMP_INTERVAL" ] || echo "FENGHUO_ICMP_INTERVAL=$ICMP_INTERVAL"
 			[ -z "$ALLOW_HTTP" ] || echo "FENGHUO_ALLOW_HTTP=true"
 		} >"$ENV_FILE.tmp"
 		mv "$ENV_FILE.tmp" "$ENV_FILE"

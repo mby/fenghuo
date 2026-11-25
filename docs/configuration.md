@@ -321,3 +321,15 @@ endpoint on your LAN, start the server with `-notify-allow-private`.
 A rule applies to all servers or to the servers you select. Servers that have
 never reported do not trigger offline alerts. Alert state survives restarts, so
 one-shot alerts are not sent twice.
+
+## ICMP and protocol selection
+
+`-icmp` / `FENGHUO_ICMP` accepts `name=IPv4` lists. `-icmp-interval` / `FENGHUO_ICMP_INTERVAL` defaults to `2s` and accepts `1s`–`60s`. Existing `-ping` remains TCP. Admin installation presets select TCP, ICMP or both per target. The shared probe interval (15, 30 or 60 seconds, default 30) is used for both protocols in generated installation and configuration commands; saving does not configure agents remotely. `/configure-probes.sh` is bundled with the server so generated commands use the matching script. Release installation archives must also contain this agent version; upgrade older agents before enabling ICMP.
+
+```bash
+sudo bash configure-probes.sh --ping 'Example=192.0.2.10:80' --ping-interval 30s --icmp 'Example=192.0.2.10' --icmp-interval 30s
+```
+
+Without an explicit --icmp-interval, the configuration script uses --ping-interval for both protocols (default 30s). The script replaces the local target set while preserving the agent token and server configuration. `--disable` disables both protocols.
+
+`192.0.2.10` is a documentation address; replace it with your own reachable probe target.
