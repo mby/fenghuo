@@ -5,6 +5,7 @@ RUN npm install -g pnpm@11.17.0
 WORKDIR /src/web
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
+COPY deploy/configure-probes.sh /src/deploy/configure-probes.sh
 COPY web/ ./
 RUN mkdir -p /src/internal/server/webui/dist && pnpm build
 
