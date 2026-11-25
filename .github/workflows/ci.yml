@@ -54,6 +54,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+      - name: Docker frontend build
+        run: docker build --target web ..
 
   scripts:
     runs-on: ubuntu-24.04
