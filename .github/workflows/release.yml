@@ -86,7 +86,13 @@ jobs:
             echo 'Existing release matches this build; keeping published assets.'
             exit 0
           fi
-          args=(--verify-tag --generate-notes --title "$RELEASE_TAG")
+          args=(--verify-tag --title "$RELEASE_TAG")
+          notes="docs/releases/$RELEASE_TAG.md"
+          if [[ -f "$notes" ]]; then
+            args+=(--notes-file "$notes")
+          else
+            args+=(--generate-notes)
+          fi
           if [[ "$RELEASE_TAG" == *-* ]]; then
             args+=(--prerelease)
           fi
